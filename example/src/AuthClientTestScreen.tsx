@@ -33,7 +33,7 @@ const AuthClientTestScreen: React.FC = () => {
   
   // Configuration state
   const [config, setConfig] = useState<AuthClientConfig>({
-    baseUrl: 'http://103.156.208.92:20080/ospyndocs/',
+    baseUrl: 'https://domain.com/app/',
     isEncryptionRequired: false,
     clientId: '123456',
     passPhrase: 'test-passphrase',
@@ -41,7 +41,7 @@ const AuthClientTestScreen: React.FC = () => {
   
   // Authentication state
   const [credentials, setCredentials] = useState<AuthCredentials>({
-    username: 'MO1',
+    username: 'username',
     password: 'Pass@123',
   });
   
@@ -97,7 +97,7 @@ const AuthClientTestScreen: React.FC = () => {
     setIsLoading(true);
     try {
       const result: AuthResponse = await AuthClient.authenticate(
-        '/api/authenticate',
+        '/api/authenticate-endpoint',
         credentials
       );
 
@@ -145,7 +145,7 @@ const AuthClientTestScreen: React.FC = () => {
   const handleTestGet = useCallback(async () => {
     setIsLoading(true);
     try {
-      const result = await AuthClient.get('deep-rest/api/v1/user/info/data', {
+      const result = await AuthClient.get('user/info/data', {
         headers: { 'Content-Type': 'application/json' }
       });
       
@@ -170,7 +170,7 @@ const AuthClientTestScreen: React.FC = () => {
         "parentNodeId": "1388041405164736513",
         "sortCriteria": "DATE_DESC"
       };
-      const result = await AuthClient.post('deep-rest/api/v1/repo/runtime/nodes', testData, {
+      const result = await AuthClient.post('-endpoint', testData, {
         headers: { 'Content-Type': 'application/json' }
       });
       showResult('POST Request Result', result);
@@ -186,7 +186,7 @@ const AuthClientTestScreen: React.FC = () => {
   const handleLogout = useCallback(async () => {
     setIsLoading(true);
     try {
-      const result: AuthResponse = await AuthClient.logout('deep-rest/api/v1/logout');
+      const result: AuthResponse = await AuthClient.logout('/logout');
       showResult('Logout Result', result);
       Alert.alert('Success', 'Logged out successfully!');
     } catch (error) {
@@ -198,7 +198,7 @@ const AuthClientTestScreen: React.FC = () => {
   }, []);
 
   // Create node content for file upload
-  const createNodeContent = (currentFolderNodeId: string = '1388041405164736513') => {
+  const createNodeContent = (currentFolderNodeId: string = 'folderId') => {
     return {
       parentNodeId: currentFolderNodeId,
       hierarchyType: 'deep:file',
@@ -225,7 +225,7 @@ const AuthClientTestScreen: React.FC = () => {
     
     try {
       const filePath = await createTestFile();
-      const nodeContent = createNodeContent('1388041405164736513');
+      const nodeContent = createNodeContent('folderId');
       
       const requestBody: DeepFileUploadRequest = {
         file: {
@@ -235,7 +235,7 @@ const AuthClientTestScreen: React.FC = () => {
       };
 
       const result: FileResponse = await AuthClient.uploadFile(
-        'deep-rest/api/v1/repo/runtime/file/upload',
+        '/file/upload',
         requestBody,
         (progress: ProgressEvent) => {
           const progressPercent = Math.round(progress.progress * 100);
@@ -275,7 +275,7 @@ const AuthClientTestScreen: React.FC = () => {
     setIsLoading(true);
     
     try {
-      const fileUrl = 'deep-rest/public/platform/runtime/user/photo/43';
+      const fileUrl = 'user/photo/43';
       const downloadPath = createDownloadFilePath();
 
       const result: FileResponse = await AuthClient.downloadFile(
@@ -306,7 +306,7 @@ const AuthClientTestScreen: React.FC = () => {
     setIsLoading(true);
     
     try {
-      const fileUrl = '/deep-rest/api/v1/repo/runtime/file/1399717870583205888';
+      const fileUrl = '/file/folderId';
 
       const result: FileResponse = await AuthClient.downloadFileAsBase64(
         fileUrl,
@@ -341,7 +341,7 @@ const AuthClientTestScreen: React.FC = () => {
     try {
       const documentCId = '7b3fb8ce-bf85-4787-b166-8fcad7164e0d';
       const pageNumber = '1';
-      const endpoint = `deep-rest/api/v1/viewer/pageImage/${documentCId}/${pageNumber}`;
+      const endpoint = `viewer/pageImage/${documentCId}/${pageNumber}`;
       
       const requestBody = {
         parameters: ["REDACT", "STAMP", "SIGNATURE", "ANNOTATION"]
