@@ -225,7 +225,8 @@ class AuthClient_Legacy: RCTEventEmitter {
   }
 }
 
-// MARK: - Module Name
+/*
+// MARK: - Module Name (LEGACY - DISABLED)
 extension AuthClient {
   @objc
   override static func moduleName() -> String! {
@@ -233,7 +234,7 @@ extension AuthClient {
   }
 }
 
-// MARK: - Client Delegate
+// MARK: - Client Delegate (LEGACY - DISABLED)
 extension AuthClient: ClientDelegate {
   func emitEvent(name: String, body: String) {
     sendEvent(withName: name, body: body)
@@ -250,7 +251,7 @@ extension AuthClient: ClientDelegate {
 }
 
 #if RCT_NEW_ARCH_ENABLED
-// MARK: - TurboModule Protocol Conformance
+// MARK: - TurboModule Protocol Conformance (LEGACY - DISABLED)
 extension AuthClient: NativeAuthClientSpec {
   func initializeClient(
     baseUrl: String,
