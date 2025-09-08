@@ -1,10 +1,10 @@
 /*
 // ========================================================================================
-// LEGACY IMPLEMENTATION - COMMENTED OUT FOR REVIEW
+// LEGACY IMPLEMENTATION - COMPLETELY DISABLED
 // ========================================================================================
 // This file contains the old callback-based Alamofire implementation
 // It has been replaced by ModernAuthClient.swift with async/await
-// Keep this file for reference and manual review before deletion
+// This entire file is disabled to prevent duplicate symbol errors
 // ========================================================================================
 
 //
