@@ -84,3 +84,7 @@ android/generated
 
 # React Native Nitro Modules
 nitrogen/
+
+# Local development/status files
+CURRENT_STATUS.md
+LIBRARY_SETUP_GUIDE.md
