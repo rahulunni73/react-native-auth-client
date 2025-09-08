@@ -10,9 +10,10 @@
 
 #ifdef RCT_NEW_ARCH_ENABLED
 
-#import <ReactCommon/RCTTurboModule.h>
 #import <React/RCTBridgeModule.h>
-#import <ReactCommon/RCTTurboModuleWithJSIBindings.h>
+#import <ReactCommon/RCTTurboModule.h>
+
+NS_ASSUME_NONNULL_BEGIN
 
 @protocol NativeAuthClientSpec <RCTTurboModule>
 
@@ -98,5 +99,7 @@
 - (void)cancelAllRequests;
 
 @end
+
+NS_ASSUME_NONNULL_END
 
 #endif // RCT_NEW_ARCH_ENABLED
