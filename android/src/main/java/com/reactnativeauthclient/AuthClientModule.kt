@@ -22,7 +22,7 @@ class AuthClientModule(
     override val coroutineContext = SupervisorJob() + Dispatchers.Main
 
     private val authClientWrapper by lazy {
-        AuthClientWrapper(reactContext, ::emitEvent)
+        AuthClientManager.getInstance(reactContext, ::emitEvent)
     }
 
     override fun getName(): String = NAME
@@ -31,6 +31,8 @@ class AuthClientModule(
         super.invalidate()
         // Cancel all coroutines when module is destroyed
         coroutineContext[Job]?.cancel()
+        // Note: We don't clear the singleton instance here as it may be used by other modules
+        // Only clear it if this is the last module or during app shutdown
     }
 
     // Event emission for progress tracking

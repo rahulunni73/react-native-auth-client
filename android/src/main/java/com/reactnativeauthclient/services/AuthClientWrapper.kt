@@ -694,6 +694,24 @@ class AuthClientWrapper(
         activeRequests.values.forEach { it.cancel() }
         activeRequests.clear()
     }
+    
+    // Public access methods for external modules
+    fun getBaseUrl(): String = baseUrl
+    
+    fun getClientId(): String = clientId
+    
+    fun isEncryptionRequired(): Boolean = isEncryptionRequired
+    
+    fun isInitialized(): Boolean = baseUrl.isNotEmpty()
+    
+    fun getConfigurationInfo(): Map<String, Any> {
+        return mapOf(
+            "baseUrl" to baseUrl,
+            "clientId" to clientId,
+            "encryptionEnabled" to isEncryptionRequired,
+            "isConfigured" to (baseUrl.isNotEmpty())
+        )
+    }
 
     // Private helper methods
     private suspend fun processAuthResponse(response: Response<ApiAuthResponse>, requestId: String): String {
