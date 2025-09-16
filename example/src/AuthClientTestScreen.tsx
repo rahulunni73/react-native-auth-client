@@ -30,7 +30,7 @@ const AuthClientTestScreen: React.FC = () => {
   const [isInitialized, setIsInitialized] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [response, setResponse] = useState<string>('');
-  
+
   // Configuration state
   const [config, setConfig] = useState<AuthClientConfig>({
     baseUrl: 'https://domain.com/app/',
@@ -38,13 +38,13 @@ const AuthClientTestScreen: React.FC = () => {
     clientId: '123456',
     passPhrase: 'test-passphrase',
   });
-  
+
   // Authentication state
   const [credentials, setCredentials] = useState<AuthCredentials>({
     username: 'username',
     password: 'Pass@123',
   });
-  
+
   // Google SSO state
   const [googleCredentials, setGoogleCredentials] = useState({
     username: 'user@example.com',
@@ -54,11 +54,13 @@ const AuthClientTestScreen: React.FC = () => {
   // File operation state
   const [uploadProgress, setUploadProgress] = useState<number>(0);
   const [downloadProgress, setDownloadProgress] = useState<number>(0);
-  const [fileOperationActive, setFileOperationActive] = useState<boolean>(false);
+  const [fileOperationActive, setFileOperationActive] =
+    useState<boolean>(false);
 
   // Utility function to display results
   const showResult = (title: string, result: any) => {
-    const resultText = typeof result === 'string' ? result : JSON.stringify(result, null, 2);
+    const resultText =
+      typeof result === 'string' ? result : JSON.stringify(result, null, 2);
     setResponse(`${title}:\n${resultText}`);
   };
 
@@ -102,8 +104,9 @@ const AuthClientTestScreen: React.FC = () => {
       );
 
       showResult('Authentication Result', result);
-      
-      if (result.loginStatus === 0) { // AUTH_SUCCESS
+
+      if (result.loginStatus === 0) {
+        // AUTH_SUCCESS
         Alert.alert('Success', 'Authentication successful!');
       } else {
         Alert.alert('Failed', result.errorMessage || 'Authentication failed');
@@ -127,11 +130,15 @@ const AuthClientTestScreen: React.FC = () => {
       );
 
       showResult('Google Authentication Result', result);
-      
-      if (result.loginStatus === 0) { // AUTH_SUCCESS
+
+      if (result.loginStatus === 0) {
+        // AUTH_SUCCESS
         Alert.alert('Success', 'Google authentication successful!');
       } else {
-        Alert.alert('Failed', result.errorMessage || 'Google authentication failed');
+        Alert.alert(
+          'Failed',
+          result.errorMessage || 'Google authentication failed'
+        );
       }
     } catch (error) {
       showResult('Google Authentication Error', error);
@@ -146,9 +153,9 @@ const AuthClientTestScreen: React.FC = () => {
     setIsLoading(true);
     try {
       const result = await AuthClient.get('user/info/data', {
-        headers: { 'Content-Type': 'application/json' }
+        headers: { 'Content-Type': 'application/json' },
       });
-      
+
       showResult('GET Request Result', result);
     } catch (error) {
       showResult('GET Request Error', error);
@@ -163,15 +170,15 @@ const AuthClientTestScreen: React.FC = () => {
     setIsLoading(true);
     try {
       const testData = {
-        "limit": 10,
-        "name": "",
-        "nodeTypeQnames": [],
-        "offset": 10,
-        "parentNodeId": "1388041405164736513",
-        "sortCriteria": "DATE_DESC"
+        limit: 10,
+        name: '',
+        nodeTypeQnames: [],
+        offset: 10,
+        parentNodeId: '1388041405164736513',
+        sortCriteria: 'DATE_DESC',
       };
       const result = await AuthClient.post('-endpoint', testData, {
-        headers: { 'Content-Type': 'application/json' }
+        headers: { 'Content-Type': 'application/json' },
       });
       showResult('POST Request Result', result);
     } catch (error) {
@@ -222,11 +229,11 @@ const AuthClientTestScreen: React.FC = () => {
     setFileOperationActive(true);
     setUploadProgress(0);
     setIsLoading(true);
-    
+
     try {
       const filePath = await createTestFile();
       const nodeContent = createNodeContent('folderId');
-      
+
       const requestBody: DeepFileUploadRequest = {
         file: {
           fileContent: filePath,
@@ -245,7 +252,6 @@ const AuthClientTestScreen: React.FC = () => {
 
       showResult('File Upload Result', result);
       Alert.alert('Success', `File uploaded successfully!`);
-      
     } catch (error) {
       showResult('File Upload Error', error);
       Alert.alert('Error', `File upload failed: ${error}`);
@@ -260,7 +266,7 @@ const AuthClientTestScreen: React.FC = () => {
   const createDownloadFilePath = (): string => {
     const timestamp = Date.now();
     const fileName = `downloaded-file-${timestamp}.pdf`;
-    
+
     if (Platform.OS === 'ios') {
       return `Documents/${fileName}`;
     } else {
@@ -273,7 +279,7 @@ const AuthClientTestScreen: React.FC = () => {
     setFileOperationActive(true);
     setDownloadProgress(0);
     setIsLoading(true);
-    
+
     try {
       const fileUrl = 'user/photo/43';
       const downloadPath = createDownloadFilePath();
@@ -289,8 +295,10 @@ const AuthClientTestScreen: React.FC = () => {
       );
 
       showResult('File Download Result', result);
-      Alert.alert('Success', `File downloaded to: ${result.filePath || downloadPath}`);
-      
+      Alert.alert(
+        'Success',
+        `File downloaded to: ${result.filePath || downloadPath}`
+      );
     } catch (error) {
       showResult('File Download Error', error);
       Alert.alert('Error', `File download failed: ${error}`);
@@ -304,26 +312,30 @@ const AuthClientTestScreen: React.FC = () => {
   // Test file download as Base64
   const handleDownloadAsBase64 = useCallback(async () => {
     setIsLoading(true);
-    
+
     try {
       const fileUrl = '/file/folderId';
 
       const result: FileResponse = await AuthClient.downloadFileAsBase64(
         fileUrl,
         {
-          headers: { 'Accept': 'image/jpeg' }
+          headers: { Accept: 'image/jpeg' },
         }
       );
 
       showResult('Base64 Download Result', {
         message: result.message,
         fileSize: result.fileSize,
-        dataPreview: result.data ? `${result.data.substring(0, 100)}...` : 'No data',
-        dataLength: result.data?.length || 0
+        dataPreview: result.data
+          ? `${result.data.substring(0, 100)}...`
+          : 'No data',
+        dataLength: result.data?.length || 0,
       });
-      
-      Alert.alert('Success', `File downloaded as Base64! Size: ${result.data?.length || 0} chars`);
-      
+
+      Alert.alert(
+        'Success',
+        `File downloaded as Base64! Size: ${result.data?.length || 0} chars`
+      );
     } catch (error) {
       showResult('Base64 Download Error', error);
       Alert.alert('Error', `Base64 download failed: ${error}`);
@@ -337,24 +349,24 @@ const AuthClientTestScreen: React.FC = () => {
     setFileOperationActive(true);
     setDownloadProgress(0);
     setIsLoading(true);
-    
+
     try {
       const documentCId = '7b3fb8ce-bf85-4787-b166-8fcad7164e0d';
       const pageNumber = '1';
       const endpoint = `viewer/pageImage/${documentCId}/${pageNumber}`;
-      
+
       const requestBody = {
-        parameters: ["REDACT", "STAMP", "SIGNATURE", "ANNOTATION"]
+        parameters: ['REDACT', 'STAMP', 'SIGNATURE', 'ANNOTATION'],
       };
 
       const result: FileResponse = await AuthClient.downloadFileWithPost(
         endpoint,
         requestBody,
         {
-          headers: { 
+          headers: {
             'Content-Type': 'application/json',
-            'Accept': 'image/png' 
-          }
+            'Accept': 'image/png',
+          },
         },
         (progress: ProgressEvent) => {
           const progressPercent = Math.round(progress.progress * 100);
@@ -363,8 +375,10 @@ const AuthClientTestScreen: React.FC = () => {
       );
 
       showResult('POST Download Result', result);
-      Alert.alert('Success', `File downloaded to temp directory: ${result.filePath}`);
-      
+      Alert.alert(
+        'Success',
+        `File downloaded to temp directory: ${result.filePath}`
+      );
     } catch (error) {
       showResult('POST Download Error', error);
       Alert.alert('Error', `POST download failed: ${error}`);
@@ -378,28 +392,34 @@ const AuthClientTestScreen: React.FC = () => {
   return (
     <ScrollView style={styles.container}>
       <Text style={styles.title}>react-native-auth-client Test</Text>
-      <Text style={styles.subtitle}>Testing the published AuthClient library</Text>
-      
+      <Text style={styles.subtitle}>
+        Testing the published AuthClient library
+      </Text>
+
       {/* Configuration Section */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Configuration</Text>
-        
+
         <Text style={styles.label}>Base URL:</Text>
         <TextInput
           style={styles.input}
           value={config.baseUrl}
-          onChangeText={(text) => setConfig(prev => ({ ...prev, baseUrl: text }))}
+          onChangeText={(text) =>
+            setConfig((prev) => ({ ...prev, baseUrl: text }))
+          }
           placeholder="https://api.example.com"
         />
-        
+
         <Text style={styles.label}>Client ID:</Text>
         <TextInput
           style={styles.input}
           value={config.clientId}
-          onChangeText={(text) => setConfig(prev => ({ ...prev, clientId: text }))}
+          onChangeText={(text) =>
+            setConfig((prev) => ({ ...prev, clientId: text }))
+          }
           placeholder="client-id"
         />
-        
+
         <TouchableOpacity
           style={[styles.button, isInitialized && styles.buttonDisabled]}
           onPress={handleInitialize}
@@ -415,25 +435,29 @@ const AuthClientTestScreen: React.FC = () => {
       {isInitialized && (
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Authentication</Text>
-          
+
           <Text style={styles.subSectionTitle}>Username/Password Login</Text>
           <Text style={styles.label}>Username:</Text>
           <TextInput
             style={styles.input}
             value={credentials.username}
-            onChangeText={(text) => setCredentials(prev => ({ ...prev, username: text }))}
+            onChangeText={(text) =>
+              setCredentials((prev) => ({ ...prev, username: text }))
+            }
             placeholder="username"
           />
-          
+
           <Text style={styles.label}>Password:</Text>
           <TextInput
             style={styles.input}
             value={credentials.password}
-            onChangeText={(text) => setCredentials(prev => ({ ...prev, password: text }))}
+            onChangeText={(text) =>
+              setCredentials((prev) => ({ ...prev, password: text }))
+            }
             placeholder="password"
             secureTextEntry
           />
-          
+
           <TouchableOpacity
             style={styles.button}
             onPress={handleAuthenticate}
@@ -441,28 +465,34 @@ const AuthClientTestScreen: React.FC = () => {
           >
             <Text style={styles.buttonText}>🔑 Authenticate</Text>
           </TouchableOpacity>
-          
+
           {/* Google SSO Authentication */}
-          <Text style={[styles.subSectionTitle, { marginTop: 16 }]}>Google SSO Login</Text>
+          <Text style={[styles.subSectionTitle, { marginTop: 16 }]}>
+            Google SSO Login
+          </Text>
           <Text style={styles.label}>Email:</Text>
           <TextInput
             style={styles.input}
             value={googleCredentials.username}
-            onChangeText={(text) => setGoogleCredentials(prev => ({ ...prev, username: text }))}
+            onChangeText={(text) =>
+              setGoogleCredentials((prev) => ({ ...prev, username: text }))
+            }
             placeholder="user@example.com"
             keyboardType="email-address"
           />
-          
+
           <Text style={styles.label}>Google ID Token:</Text>
           <TextInput
             style={styles.input}
             value={googleCredentials.idToken}
-            onChangeText={(text) => setGoogleCredentials(prev => ({ ...prev, idToken: text }))}
+            onChangeText={(text) =>
+              setGoogleCredentials((prev) => ({ ...prev, idToken: text }))
+            }
             placeholder="Google ID Token (JWT)"
             multiline={true}
             numberOfLines={2}
           />
-          
+
           <TouchableOpacity
             style={[styles.button, styles.googleButton]}
             onPress={handleGoogleAuthenticate}
@@ -477,7 +507,7 @@ const AuthClientTestScreen: React.FC = () => {
       {isInitialized && (
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>HTTP Operations</Text>
-          
+
           <TouchableOpacity
             style={styles.button}
             onPress={handleGetClientInfo}
@@ -485,7 +515,7 @@ const AuthClientTestScreen: React.FC = () => {
           >
             <Text style={styles.buttonText}>📋 Get Client Info</Text>
           </TouchableOpacity>
-          
+
           <TouchableOpacity
             style={[styles.button, styles.httpGetButton]}
             onPress={handleTestGet}
@@ -493,7 +523,7 @@ const AuthClientTestScreen: React.FC = () => {
           >
             <Text style={styles.buttonText}>🔽 HTTP GET Request</Text>
           </TouchableOpacity>
-          
+
           <TouchableOpacity
             style={[styles.button, styles.httpPostButton]}
             onPress={handleTestPost}
@@ -501,7 +531,7 @@ const AuthClientTestScreen: React.FC = () => {
           >
             <Text style={styles.buttonText}>🔼 HTTP POST Request</Text>
           </TouchableOpacity>
-          
+
           <TouchableOpacity
             style={[styles.button, styles.logoutButton]}
             onPress={handleLogout}
@@ -516,41 +546,60 @@ const AuthClientTestScreen: React.FC = () => {
       {isInitialized && (
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>File Operations</Text>
-          
+
           <TouchableOpacity
-            style={[styles.button, styles.uploadButton, fileOperationActive && styles.buttonDisabled]}
+            style={[
+              styles.button,
+              styles.uploadButton,
+              fileOperationActive && styles.buttonDisabled,
+            ]}
             onPress={handleFileUpload}
             disabled={isLoading || fileOperationActive}
           >
             <Text style={styles.buttonText}>📤 Upload Test File</Text>
           </TouchableOpacity>
-          
+
           {uploadProgress > 0 && fileOperationActive && (
             <View style={styles.progressContainer}>
-              <Text style={styles.progressText}>Upload Progress: {uploadProgress}%</Text>
+              <Text style={styles.progressText}>
+                Upload Progress: {uploadProgress}%
+              </Text>
               <View style={styles.progressBar}>
-                <View style={[styles.progressFill, { width: `${uploadProgress}%` }]} />
+                <View
+                  style={[styles.progressFill, { width: `${uploadProgress}%` }]}
+                />
               </View>
             </View>
           )}
-          
+
           <TouchableOpacity
-            style={[styles.button, styles.downloadButton, fileOperationActive && styles.buttonDisabled]}
+            style={[
+              styles.button,
+              styles.downloadButton,
+              fileOperationActive && styles.buttonDisabled,
+            ]}
             onPress={handleFileDownload}
             disabled={isLoading || fileOperationActive}
           >
             <Text style={styles.buttonText}>📥 Download to Device</Text>
           </TouchableOpacity>
-          
+
           {downloadProgress > 0 && fileOperationActive && (
             <View style={styles.progressContainer}>
-              <Text style={styles.progressText}>Download Progress: {downloadProgress}%</Text>
+              <Text style={styles.progressText}>
+                Download Progress: {downloadProgress}%
+              </Text>
               <View style={styles.progressBar}>
-                <View style={[styles.progressFill, { width: `${downloadProgress}%` }]} />
+                <View
+                  style={[
+                    styles.progressFill,
+                    { width: `${downloadProgress}%` },
+                  ]}
+                />
               </View>
             </View>
           )}
-          
+
           <TouchableOpacity
             style={[styles.button, styles.base64Button]}
             onPress={handleDownloadAsBase64}
@@ -558,9 +607,13 @@ const AuthClientTestScreen: React.FC = () => {
           >
             <Text style={styles.buttonText}>📊 Download as Base64</Text>
           </TouchableOpacity>
-          
+
           <TouchableOpacity
-            style={[styles.button, styles.postDownloadButton, fileOperationActive && styles.buttonDisabled]}
+            style={[
+              styles.button,
+              styles.postDownloadButton,
+              fileOperationActive && styles.buttonDisabled,
+            ]}
             onPress={handleDownloadWithPost}
             disabled={isLoading || fileOperationActive}
           >

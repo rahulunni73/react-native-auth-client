@@ -77,7 +77,7 @@ class AuthClient {
    */
   async initialize(config: AuthClientConfig): Promise<ClientInitResponse> {
     const requestId = this.generateRequestId();
-    
+
     try {
       const response = await NativeAuthClient.initializeClient(
         config.baseUrl,
@@ -86,7 +86,7 @@ class AuthClient {
         config.passPhrase,
         requestId
       );
-      
+
       const result = this.parseResponse<ClientInitResponse>(response);
       this.isInitialized = true;
       return result;
@@ -100,7 +100,7 @@ class AuthClient {
    */
   async getClientInfo(): Promise<ClientInitResponse> {
     const requestId = this.generateRequestId();
-    
+
     try {
       const response = await NativeAuthClient.getClientInitInfo(requestId);
       return this.parseResponse<ClientInitResponse>(response);
@@ -118,7 +118,7 @@ class AuthClient {
   ): Promise<AuthResponse> {
     this.ensureInitialized();
     const requestId = this.generateRequestId();
-    
+
     try {
       const response = await NativeAuthClient.authenticate(
         endpoint,
@@ -126,7 +126,7 @@ class AuthClient {
         credentials.password,
         requestId
       );
-      
+
       return this.parseResponse<AuthResponse>(response);
     } catch (error) {
       throw new Error(`Authentication failed: ${error}`);
@@ -142,7 +142,7 @@ class AuthClient {
   ): Promise<AuthResponse> {
     this.ensureInitialized();
     const requestId = this.generateRequestId();
-    
+
     try {
       const response = await NativeAuthClient.googleAuthenticate(
         endpoint,
@@ -150,7 +150,7 @@ class AuthClient {
         credentials.idToken,
         requestId
       );
-      
+
       return this.parseResponse<AuthResponse>(response);
     } catch (error) {
       throw new Error(`Google authentication failed: ${error}`);
@@ -177,14 +177,14 @@ class AuthClient {
   ): Promise<HttpResponse<T>> {
     this.ensureInitialized();
     const requestId = this.generateRequestId();
-    
+
     try {
       const response = await NativeAuthClient.executeGet(
         url,
         config,
         requestId
       );
-      
+
       return this.parseResponse<HttpResponse<T>>(response);
     } catch (error) {
       throw new Error(`GET request failed: ${error}`);
@@ -201,7 +201,7 @@ class AuthClient {
   ): Promise<HttpResponse<T>> {
     this.ensureInitialized();
     const requestId = this.generateRequestId();
-    
+
     try {
       const response = await NativeAuthClient.executePost(
         url,
@@ -209,7 +209,7 @@ class AuthClient {
         config,
         requestId
       );
-      
+
       return this.parseResponse<HttpResponse<T>>(response);
     } catch (error) {
       throw new Error(`POST request failed: ${error}`);
@@ -227,7 +227,7 @@ class AuthClient {
   ): Promise<FileResponse> {
     this.ensureInitialized();
     const requestId = this.generateRequestId();
-    
+
     // Set up progress listener if provided
     let progressSubscription: any;
     if (onProgress) {
@@ -241,14 +241,14 @@ class AuthClient {
         }
       );
     }
-    
+
     try {
       const response = await NativeAuthClient.uploadFile(
         url,
         fileRequest,
         requestId
       );
-      
+
       return this.parseResponse<FileResponse>(response);
     } catch (error) {
       throw new Error(`File upload failed: ${error}`);
@@ -270,7 +270,7 @@ class AuthClient {
   ): Promise<FileResponse> {
     this.ensureInitialized();
     const requestId = this.generateRequestId();
-    
+
     // Set up progress listener if provided
     let progressSubscription: any;
     if (onProgress) {
@@ -284,7 +284,7 @@ class AuthClient {
         }
       );
     }
-    
+
     try {
       const response = await NativeAuthClient.downloadFile(
         url,
@@ -293,7 +293,7 @@ class AuthClient {
         destinationPath,
         requestId
       );
-      
+
       return this.parseResponse<FileResponse>(response);
     } catch (error) {
       throw new Error(`File download failed: ${error}`);
@@ -313,14 +313,14 @@ class AuthClient {
   ): Promise<FileResponse> {
     this.ensureInitialized();
     const requestId = this.generateRequestId();
-    
+
     try {
       const response = await NativeAuthClient.downloadFileInBase64(
         url,
         config,
         requestId
       );
-      
+
       return this.parseResponse<FileResponse>(response);
     } catch (error) {
       throw new Error(`Base64 download failed: ${error}`);
@@ -338,7 +338,7 @@ class AuthClient {
   ): Promise<FileResponse> {
     this.ensureInitialized();
     const requestId = this.generateRequestId();
-    
+
     // Set up progress listener if provided
     let progressSubscription: any;
     if (onProgress) {
@@ -352,7 +352,7 @@ class AuthClient {
         }
       );
     }
-    
+
     try {
       const response = await NativeAuthClient.downloadFileWithPost(
         url,
@@ -360,7 +360,7 @@ class AuthClient {
         config,
         requestId
       );
-      
+
       return this.parseResponse<FileResponse>(response);
     } catch (error) {
       throw new Error(`POST download failed: ${error}`);
@@ -377,7 +377,7 @@ class AuthClient {
   async logout(endpoint: string): Promise<AuthResponse> {
     this.ensureInitialized();
     const requestId = this.generateRequestId();
-    
+
     try {
       const response = await NativeAuthClient.logout(endpoint, requestId);
       return this.parseResponse<AuthResponse>(response);
@@ -407,7 +407,8 @@ class AuthClient {
     eventType: 'upload' | 'download',
     callback: (progress: ProgressEvent) => void
   ) {
-    const eventName = eventType === 'upload' ? 'onUploadProgress' : 'onDownloadProgress';
+    const eventName =
+      eventType === 'upload' ? 'onUploadProgress' : 'onDownloadProgress';
     return this.eventEmitter.addListener(eventName, (progress: any) => {
       callback({
         progress: parseFloat(progress),
@@ -419,7 +420,9 @@ class AuthClient {
   // Private helper methods
   private ensureInitialized(): void {
     if (!this.isInitialized) {
-      throw new Error('AuthClient must be initialized before use. Call initialize() first.');
+      throw new Error(
+        'AuthClient must be initialized before use. Call initialize() first.'
+      );
     }
   }
 }
