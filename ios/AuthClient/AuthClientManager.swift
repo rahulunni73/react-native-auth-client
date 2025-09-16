@@ -69,9 +69,12 @@ public class AuthClientManager {
     internal func clearInstance() {
         self.authClientInstance = nil
     }
+}
 
-    // Non-MainActor method for deinit contexts
-    internal static func clearInstanceFromDeinit() {
+// MARK: - Non-MainActor Helper for deinit contexts
+extension AuthClientManager {
+    /// Non-MainActor method for deinit contexts - defined outside @MainActor scope
+    nonisolated internal static func clearInstanceFromDeinit() {
         Task { @MainActor in
             shared.authClientInstance = nil
         }
