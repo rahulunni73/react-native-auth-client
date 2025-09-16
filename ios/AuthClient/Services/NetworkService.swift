@@ -9,7 +9,7 @@ import Foundation
 
 // MARK: - Network Errors
 
-enum NetworkError: Error, LocalizedError {
+public enum NetworkError: Error, LocalizedError {
     case invalidURL
     case noData
     case decodingError(Error)
@@ -20,7 +20,7 @@ enum NetworkError: Error, LocalizedError {
     case requestTimeout
     case unknown(Error)
     
-    var errorDescription: String? {
+    public var errorDescription: String? {
         switch self {
         case .invalidURL:
             return "Invalid URL provided"
@@ -46,12 +46,12 @@ enum NetworkError: Error, LocalizedError {
 
 // MARK: - Request Configuration
 
-struct RequestConfig {
+public struct RequestConfig {
     var headers: [String: String]
     var timeout: TimeInterval
     var requiresAuth: Bool
     
-    init(headers: [String: String] = [:], timeout: TimeInterval? = nil, requiresAuth: Bool = true) {
+    public init(headers: [String: String] = [:], timeout: TimeInterval? = nil, requiresAuth: Bool = true) {
         self.headers = headers
         self.timeout = timeout ?? Client.getDefaultTimeout()
         self.requiresAuth = requiresAuth
@@ -61,8 +61,8 @@ struct RequestConfig {
 // MARK: - Network Service
 
 @MainActor
-class NetworkService: ObservableObject {
-    static let shared = NetworkService()
+public class NetworkService: ObservableObject {
+    public static let shared = NetworkService()
     
     private let tokenManager: TokenManager
     private let session: URLSession
@@ -86,7 +86,7 @@ class NetworkService: ObservableObject {
     
     // MARK: - GET Request
     
-    func get<T: Decodable>(
+    public func get<T: Decodable>(
         endpoint: String,
         responseType: T.Type,
         config: RequestConfig = RequestConfig()
@@ -111,7 +111,7 @@ class NetworkService: ObservableObject {
     
     // MARK: - POST Request
     
-    func post<T: Decodable>(
+    public func post<T: Decodable>(
         endpoint: String,
         body: [String: Any]? = nil,
         responseType: T.Type,
@@ -151,7 +151,7 @@ class NetworkService: ObservableObject {
     
     // MARK: - Raw Data Request
     
-    func requestData(
+    public func requestData(
         endpoint: String,
         method: String = "GET",
         body: [String: Any]? = nil,
@@ -187,7 +187,7 @@ class NetworkService: ObservableObject {
     
     // MARK: - File Upload
     
-    func uploadFile(
+    public func uploadFile(
         endpoint: String,
         fileData: Data,
         fileName: String,

@@ -16,6 +16,7 @@ A comprehensive React Native authentication client with cross-platform support f
 - ✅ **Progress tracking** for all operations
 - ✅ **Request cancellation** support
 - ✅ **PBKDF2 encryption** for request/response encryption
+- ✅ **Singleton pattern** for iOS custom native modules access
 
 ## Installation
 
@@ -288,6 +289,68 @@ Cancel all active requests.
 - **Android**: Kotlin with Coroutines, Retrofit + OkHttp networking
 - **JavaScript**: TypeScript with comprehensive type definitions
 
+### iOS Custom Native Modules Support
+
+The library provides singleton access for custom iOS native modules to use authenticated services directly:
+
+```swift
+import Foundation
+
+@objc(CustomModuleExample)
+public class CustomModuleExample: NSObject {
+
+    @objc
+    public func makeAuthenticatedRequest(_ endpoint: String,
+                                       completion: @escaping (String?, NSError?) -> Void) {
+        Task { @MainActor in
+            // Check if AuthClient is initialized
+            guard AuthClientManager.isInitialized() else {
+                let error = NSError(domain: "CustomModuleError", code: 1001,
+                                  userInfo: [NSLocalizedDescriptionKey: "AuthClient not initialized"])
+                completion(nil, error)
+                return
+            }
+
+            // Get authenticated network service
+            guard let networkService = AuthClientManager.getNetworkService() else {
+                let error = NSError(domain: "CustomModuleError", code: 1002,
+                                  userInfo: [NSLocalizedDescriptionKey: "NetworkService not available"])
+                completion(nil, error)
+                return
+            }
+
+            do {
+                // Make authenticated request (tokens handled automatically)
+                let data = try await networkService.requestData(
+                    endpoint: endpoint,
+                    method: "GET"
+                )
+
+                let response = String(data: data, encoding: .utf8) ?? "No data"
+                completion(response, nil)
+
+            } catch {
+                completion(nil, error as NSError)
+            }
+        }
+    }
+
+    @objc
+    public func checkAuthenticationStatus(completion: @escaping (Bool) -> Void) {
+        Task { @MainActor in
+            let isAuthenticated = await AuthClientManager.isAuthenticated()
+            completion(isAuthenticated)
+        }
+    }
+}
+```
+
+**Key Benefits:**
+- **Zero token management** required in custom modules
+- **Automatic token refresh** on 401 errors
+- **Thread-safe** MainActor-isolated access
+- **Matches Android implementation** pattern
+
 ### TurboModule Support
 
 The library supports both React Native architectures:
@@ -328,6 +391,12 @@ npx react-native run-android
 MIT
 
 ## Changelog
+
+### v0.2.0
+- Added iOS singleton pattern support for custom native modules
+- Exposed AuthClientManager with public access to NetworkService, TokenManager, and Client
+- Enhanced iOS architecture to match Android implementation pattern
+- Custom modules can now access authenticated services without token management complexity
 
 ### v0.1.0
 - Initial release with full cross-platform AuthClient implementation

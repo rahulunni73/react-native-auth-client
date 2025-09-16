@@ -148,8 +148,8 @@ struct TokenInfo {
 // MARK: - Token Manager
 
 @MainActor
-class TokenManager: ObservableObject {
-    static let shared = TokenManager()
+public class TokenManager: ObservableObject {
+    public static let shared = TokenManager()
     
     private let storage: TokenStorage
     private let accessTokenKey = "access_token"
@@ -160,7 +160,7 @@ class TokenManager: ObservableObject {
     private var cachedRefreshToken: String?
     private var tokenInfo: TokenInfo?
     
-    @Published var isAuthenticated = false
+    @Published public var isAuthenticated = false
     
     private init(storage: TokenStorage = KeychainStorage()) {
         self.storage = storage
@@ -173,7 +173,7 @@ class TokenManager: ObservableObject {
     
     // MARK: - Public Methods
     
-    func saveTokens(accessToken: String, refreshToken: String) async {
+    public func saveTokens(accessToken: String, refreshToken: String) async {
         do {
             try await storage.store(accessToken, forKey: accessTokenKey)
             try await storage.store(refreshToken, forKey: refreshTokenKey)
@@ -197,7 +197,7 @@ class TokenManager: ObservableObject {
         }
     }
     
-    func getAccessToken() async -> String {
+    public func getAccessToken() async -> String {
         if let cached = cachedAccessToken {
             return cached
         }
@@ -212,7 +212,7 @@ class TokenManager: ObservableObject {
         }
     }
     
-    func getRefreshToken() async -> String {
+    public func getRefreshToken() async -> String {
         if let cached = cachedRefreshToken {
             return cached
         }
@@ -227,7 +227,7 @@ class TokenManager: ObservableObject {
         }
     }
     
-    func isTokenExpired() async -> Bool {
+    public func isTokenExpired() async -> Bool {
         // Check cached token info first
         if let info = tokenInfo {
             return info.isExpired
@@ -249,7 +249,7 @@ class TokenManager: ObservableObject {
         }
     }
     
-    func getTokenExpirationDate() async -> Date? {
+    public func getTokenExpirationDate() async -> Date? {
         if let info = tokenInfo {
             return info.expirationDate
         }
@@ -268,7 +268,7 @@ class TokenManager: ObservableObject {
         }
     }
     
-    func clearTokens() async {
+    public func clearTokens() async {
         do {
             try await storage.clear()
             
@@ -285,7 +285,7 @@ class TokenManager: ObservableObject {
         }
     }
     
-    func hasValidTokens() async -> Bool {
+    public func hasValidTokens() async -> Bool {
         let accessToken = await getAccessToken()
         let refreshToken = await getRefreshToken()
         let isExpired = await isTokenExpired()
@@ -293,7 +293,7 @@ class TokenManager: ObservableObject {
         return !accessToken.isEmpty && !refreshToken.isEmpty && !isExpired
     }
     
-    func hasRefreshToken() async -> Bool {
+    public func hasRefreshToken() async -> Bool {
         let refreshToken = await getRefreshToken()
         return !refreshToken.isEmpty
     }

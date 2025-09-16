@@ -32,10 +32,13 @@ class AuthClient: RCTEventEmitter {
   override init() {
     super.init()
     print("ModernAuthClient initialized with async/await support")
-    
+
     Task { @MainActor [weak self] in
       guard let self = self else { return }
       self.modernClientWrapper = ModernClientWrapper(delegate: self)
+
+      // ✅ Register with AuthClientManager
+      AuthClientManager.shared.setInstance(self.modernClientWrapper)
     }
   }
   
@@ -297,6 +300,8 @@ class AuthClient: RCTEventEmitter {
   // MARK: - Memory Management
   
   deinit {
+    // ✅ Clear from manager
+    AuthClientManager.shared.clearInstance()
     // Cancel all requests during deinitialization
     // Note: We can't call MainActor methods from deinit, so cleanup is handled by ModernClientWrapper's deinit
     promises.removeAll()

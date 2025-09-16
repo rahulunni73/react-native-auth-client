@@ -6,10 +6,10 @@
 
 import Foundation
 
-struct Client {
+public struct Client {
   
   // Singleton instance
-  static let shared = Client()
+  public static let shared = Client()
   
   // Configuration properties
   static var baseURL: String = ""
@@ -41,7 +41,7 @@ struct Client {
     #endif
   }
   
-  static func getBaseUrl() -> String {
+  public static func getBaseUrl() -> String {
     return baseURL
   }
   
@@ -54,7 +54,7 @@ struct Client {
     #endif
   }
   
-  static func getClientId() -> String {
+  public static func getClientId() -> String {
     return clientId
   }
   
@@ -80,7 +80,7 @@ struct Client {
     #endif
   }
   
-  static func getIsEncryptionRequired() -> Bool {
+  public static func getIsEncryptionRequired() -> Bool {
     return isEncryptionRequired
   }
   
@@ -95,7 +95,7 @@ struct Client {
     #endif
   }
   
-  static func getDefaultTimeout() -> TimeInterval {
+  public static func getDefaultTimeout() -> TimeInterval {
     return defaultTimeout
   }
   
@@ -119,13 +119,13 @@ struct Client {
     #endif
   }
   
-  static func isLoggingEnabled() -> Bool {
+  public static func isLoggingEnabled() -> Bool {
     return enableLogging
   }
   
   // MARK: - Validation & Utility Methods (New)
   
-  static func isConfigured() -> Bool {
+  public static func isConfigured() -> Bool {
     return !baseURL.isEmpty && !clientId.isEmpty && (!isEncryptionRequired || !passPhrase.isEmpty)
   }
   
@@ -158,7 +158,7 @@ struct Client {
   
   // MARK: - URL Helper Methods (New)
   
-  static func createFullURL(endpoint: String) -> String {
+  public static func createFullURL(endpoint: String) -> String {
     if endpoint.hasPrefix("http://") || endpoint.hasPrefix("https://") {
       return endpoint
     }
@@ -167,7 +167,7 @@ struct Client {
     return baseURL + cleanEndpoint
   }
   
-  static func validateURL(_ urlString: String) -> Bool {
+  public static func validateURL(_ urlString: String) -> Bool {
     return URL(string: urlString) != nil
   }
   
