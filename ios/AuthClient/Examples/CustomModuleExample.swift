@@ -50,10 +50,7 @@ public class CustomModuleExample: NSObject {
 
     @objc
     public func checkAuthenticationStatus(completion: @escaping (Bool) -> Void) {
-        Task { @MainActor in
-            let isAuthenticated = await AuthClientManager.isAuthenticated()
-            completion(isAuthenticated)
-        }
+        AuthClientManager.isAuthenticated(completion: completion)
     }
 
     @objc

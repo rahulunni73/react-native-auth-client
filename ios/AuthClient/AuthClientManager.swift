@@ -16,9 +16,9 @@ public class AuthClientManager {
 
     // MARK: - Public Interface (Mirror Android Implementation)
 
-    /// Get AuthClient instance if initialized (Android equivalent)
-    public static func getInstanceIfInitialized() -> ModernClientWrapper? {
-        return shared.authClientInstance
+    /// Check if AuthClient instance is initialized (Android equivalent)
+    public static func hasInstance() -> Bool {
+        return shared.authClientInstance != nil
     }
 
     /// Check if AuthClient is initialized
@@ -44,10 +44,20 @@ public class AuthClientManager {
         return Client.shared
     }
 
-    /// Check authentication status (convenience)
+    /// Check authentication status (convenience) - async version
     public static func isAuthenticated() async -> Bool {
         guard let tokenManager = getTokenManager() else { return false }
-        return await tokenManager.hasValidTokens() && !await tokenManager.isTokenExpired()
+        let hasValidTokens = await tokenManager.hasValidTokens()
+        let isTokenExpired = await tokenManager.isTokenExpired()
+        return hasValidTokens && !isTokenExpired
+    }
+
+    /// Check authentication status (convenience) - completion handler version
+    public static func isAuthenticated(completion: @escaping (Bool) -> Void) {
+        Task { @MainActor in
+            let result = await isAuthenticated()
+            completion(result)
+        }
     }
 
     // MARK: - Internal Methods
