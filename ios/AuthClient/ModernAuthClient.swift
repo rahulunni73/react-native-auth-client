@@ -300,8 +300,8 @@ class AuthClient: RCTEventEmitter {
   // MARK: - Memory Management
   
   deinit {
-    // ✅ Clear from manager
-    AuthClientManager.shared.clearInstance()
+    // ✅ Clear from manager (async safe for deinit)
+    AuthClientManager.clearInstanceFromDeinit()
     // Cancel all requests during deinitialization
     // Note: We can't call MainActor methods from deinit, so cleanup is handled by ModernClientWrapper's deinit
     promises.removeAll()
