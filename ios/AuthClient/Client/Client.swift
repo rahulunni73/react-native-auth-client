@@ -126,7 +126,7 @@ public struct Client {
   // MARK: - Validation & Utility Methods (New)
   
   public static func isConfigured() -> Bool {
-    return !baseURL.isEmpty && !clientId.isEmpty && (!isEncryptionRequired || !passPhrase.isEmpty)
+    return !baseURL.isEmpty && (!isEncryptionRequired || (!clientId.isEmpty && !passPhrase.isEmpty))
   }
   
   static func getConfigurationSummary() -> [String: Any] {
