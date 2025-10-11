@@ -48,7 +48,7 @@ public class CustomModuleExample: NSObject {
         }
     }
 
-    @objc
+    @MainActor @objc
     public func checkAuthenticationStatus(completion: @escaping (Bool) -> Void) {
         AuthClientManager.isAuthenticated(completion: completion)
     }

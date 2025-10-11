@@ -312,4 +312,8 @@ class AuthClientModule(
         // This is required for the TurboModule spec but actual listener management
         // is handled through React Native's event system
     }
+
+        fun removeListeners(count: Double) {
+        // No-op — required for RN EventEmitter
+    }
 }
