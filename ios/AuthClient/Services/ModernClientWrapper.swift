@@ -83,13 +83,13 @@ class ModernClientWrapper: ObservableObject {
                 )
                 await sendResponse(response, requestId: requestId)
             } catch {
-                await sendError(error: error, requestId: requestId)
+                await sendAuthError(error: error, requestId: requestId)
             }
         }
-        
+
         activeTasks[requestId] = task
     }
-    
+
     func googleAuthenticate(
         endpoint: String,
         username: String,
@@ -105,10 +105,10 @@ class ModernClientWrapper: ObservableObject {
                 )
                 await sendResponse(response, requestId: requestId)
             } catch {
-                await sendError(error: error, requestId: requestId)
+                await sendAuthError(error: error, requestId: requestId)
             }
         }
-        
+
         activeTasks[requestId] = task
     }
     
@@ -127,13 +127,13 @@ class ModernClientWrapper: ObservableObject {
                 )
                 await sendResponse(response, requestId: requestId)
             } catch {
-                await sendError(error: error, requestId: requestId)
+                await sendHttpError(error: error, requestId: requestId)
             }
         }
-        
+
         activeTasks[requestId] = task
     }
-    
+
     func executePost(
         endpoint: String,
         requestBody: [String: Any],
@@ -149,10 +149,10 @@ class ModernClientWrapper: ObservableObject {
                 )
                 await sendResponse(response, requestId: requestId)
             } catch {
-                await sendError(error: error, requestId: requestId)
+                await sendHttpError(error: error, requestId: requestId)
             }
         }
-        
+
         activeTasks[requestId] = task
     }
     
@@ -171,13 +171,13 @@ class ModernClientWrapper: ObservableObject {
                 )
                 await sendResponse(response, requestId: requestId)
             } catch {
-                await sendError(error: error, requestId: requestId)
+                await sendHttpError(error: error, requestId: requestId)
             }
         }
-        
+
         activeTasks[requestId] = task
     }
-    
+
     func downloadFile(
         endpoint: String,
         requestConfig: [String: Any],
@@ -193,13 +193,13 @@ class ModernClientWrapper: ObservableObject {
                 )
                 await sendResponse(response, requestId: requestId)
             } catch {
-                await sendError(error: error, requestId: requestId)
+                await sendHttpError(error: error, requestId: requestId)
             }
         }
-        
+
         activeTasks[requestId] = task
     }
-    
+
     func downloadFileInBase64(
         endpoint: String,
         requestConfig: [String: Any],
@@ -213,13 +213,13 @@ class ModernClientWrapper: ObservableObject {
                 )
                 await sendResponse(response, requestId: requestId)
             } catch {
-                await sendError(error: error, requestId: requestId)
+                await sendHttpError(error: error, requestId: requestId)
             }
         }
-        
+
         activeTasks[requestId] = task
     }
-    
+
     func downloadFileWithPost(
         endpoint: String,
         requestBody: [String: Any],
@@ -235,10 +235,10 @@ class ModernClientWrapper: ObservableObject {
                 )
                 await sendResponse(response, requestId: requestId)
             } catch {
-                await sendError(error: error, requestId: requestId)
+                await sendHttpError(error: error, requestId: requestId)
             }
         }
-        
+
         activeTasks[requestId] = task
     }
     
@@ -250,10 +250,10 @@ class ModernClientWrapper: ObservableObject {
                 let response = try await performLogout(endpoint: endpoint)
                 await sendResponse(response, requestId: requestId)
             } catch {
-                await sendError(error: error, requestId: requestId)
+                await sendHttpError(error: error, requestId: requestId)
             }
         }
-        
+
         activeTasks[requestId] = task
     }
     
@@ -933,25 +933,30 @@ class ModernClientWrapper: ObservableObject {
         } catch let error as NetworkError {
             var result: [String: Any] = [:]
             result["isError"] = true
-            
+
             switch error {
             case .unauthorized:
                 result["httpStatusCode"] = 401
+                result["message"] = "Unauthorized - Invalid session"
                 result["errorMessage"] = "Unauthorized - Invalid session"
             case .serverError(let code, let message):
                 result["httpStatusCode"] = code
+                result["message"] = message ?? "Logout failed"
                 result["errorMessage"] = message?.isEmpty == false ? message! : "Server error"
             case .networkUnavailable:
                 result["httpStatusCode"] = 0
+                result["message"] = "Network unavailable"
                 result["errorMessage"] = "Network unavailable"
             case .requestTimeout:
                 result["httpStatusCode"] = 408
+                result["message"] = "Request timeout"
                 result["errorMessage"] = "Request timeout"
             default:
                 result["httpStatusCode"] = 0
+                result["message"] = "Logout failed"
                 result["errorMessage"] = error.localizedDescription
             }
-            
+
             return ClientResponse(
                 data: result,
                 httpStatusCode: result["httpStatusCode"] as? Int ?? 0,
@@ -962,9 +967,10 @@ class ModernClientWrapper: ObservableObject {
             // Handle any other errors
             var result: [String: Any] = [:]
             result["isError"] = true
+            result["message"] = "Logout failed"
             result["errorMessage"] = "Logout failed: \(error.localizedDescription)"
             result["httpStatusCode"] = 0
-            
+
             return ClientResponse(
                 data: result,
                 httpStatusCode: 0,
@@ -1066,35 +1072,53 @@ class ModernClientWrapper: ObservableObject {
         }
     }
     
-    private func sendError(error: Error, requestId: String) async {
+    // MARK: - Specialized Error Handlers (matching Android architecture)
+
+    // Authentication errors - includes message and loginStatus
+    private func sendAuthError(error: Error, requestId: String) async {
         activeTasks.removeValue(forKey: requestId)
-        
+
         var result: [String: Any] = [:]
         result["isError"] = true
-        
+        result["message"] = "Authentication failed"
+        result["loginStatus"] = AuthClientConstants.AUTH_FAILED
+
         if let networkError = error as? NetworkError {
             result["errorMessage"] = networkError.localizedDescription
-            
+
             switch networkError {
-            case .serverError(let code, _):
+            case .serverError(let code, let message):
                 result["httpStatusCode"] = code
+                result["message"] = message ?? "Authentication failed"
+                if code == 401 {
+                    result["loginStatus"] = AuthClientConstants.TOKEN_EXPIRED
+                } else {
+                    result["loginStatus"] = AuthClientConstants.AUTH_FAILED
+                }
             case .unauthorized:
                 result["httpStatusCode"] = 401
+                result["message"] = "Unauthorized"
+                result["loginStatus"] = AuthClientConstants.TOKEN_EXPIRED
             case .networkUnavailable:
                 result["errorMessage"] = "No internet connection"
+                result["message"] = "Network unavailable"
+                result["loginStatus"] = AuthClientConstants.INTERNAL_ERROR
             case .requestTimeout:
                 result["errorMessage"] = "Request timed out"
+                result["message"] = "Request timed out"
+                result["loginStatus"] = AuthClientConstants.INTERNAL_ERROR
             default:
                 result["httpStatusCode"] = 0
+                result["loginStatus"] = AuthClientConstants.INTERNAL_ERROR
             }
         } else {
             result["errorMessage"] = error.localizedDescription
             result["httpStatusCode"] = 0
+            result["loginStatus"] = AuthClientConstants.INTERNAL_ERROR
         }
-        
-        // Add requestId for cross-platform consistency
+
         result["requestId"] = requestId
-        
+
         do {
             let jsonData = try JSONSerialization.data(withJSONObject: result, options: [])
             let jsonString = String(data: jsonData, encoding: .utf8) ?? "{\"error\": \"Failed to serialize response\"}"
@@ -1103,6 +1127,58 @@ class ModernClientWrapper: ObservableObject {
             let errorResponse = "{\"error\": \"Failed to serialize response: \(error.localizedDescription)\"}"
             delegate?.onResponseHandler(result: errorResponse, requestId: requestId)
         }
+    }
+
+    // HTTP/File errors - includes message but NO loginStatus
+    private func sendHttpError(error: Error, requestId: String) async {
+        activeTasks.removeValue(forKey: requestId)
+
+        var result: [String: Any] = [:]
+        result["isError"] = true
+        result["message"] = "Request failed"
+
+        if let networkError = error as? NetworkError {
+            result["errorMessage"] = networkError.localizedDescription
+
+            switch networkError {
+            case .serverError(let code, let message):
+                result["httpStatusCode"] = code
+                result["message"] = message ?? "Request failed"
+            case .unauthorized:
+                result["httpStatusCode"] = 401
+                result["message"] = "Unauthorized"
+            case .networkUnavailable:
+                result["httpStatusCode"] = 0
+                result["errorMessage"] = "No internet connection"
+                result["message"] = "Network unavailable"
+            case .requestTimeout:
+                result["httpStatusCode"] = 408
+                result["errorMessage"] = "Request timed out"
+                result["message"] = "Request timed out"
+            default:
+                result["httpStatusCode"] = 0
+            }
+        } else {
+            result["errorMessage"] = error.localizedDescription
+            result["httpStatusCode"] = 0
+        }
+
+        result["requestId"] = requestId
+
+        do {
+            let jsonData = try JSONSerialization.data(withJSONObject: result, options: [])
+            let jsonString = String(data: jsonData, encoding: .utf8) ?? "{\"error\": \"Failed to serialize response\"}"
+            delegate?.onResponseHandler(result: jsonString, requestId: requestId)
+        } catch {
+            let errorResponse = "{\"error\": \"Failed to serialize response: \(error.localizedDescription)\"}"
+            delegate?.onResponseHandler(result: errorResponse, requestId: requestId)
+        }
+    }
+
+    // Legacy sendError kept for compatibility - delegates to sendHttpError
+    @available(*, deprecated, message: "Use sendAuthError or sendHttpError instead")
+    private func sendError(error: Error, requestId: String) async {
+        await sendHttpError(error: error, requestId: requestId)
     }
     
     // MARK: - Memory Management

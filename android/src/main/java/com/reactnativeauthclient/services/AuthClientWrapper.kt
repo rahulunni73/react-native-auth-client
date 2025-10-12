@@ -646,16 +646,18 @@ class AuthClientWrapper(
                     }
                 } else {
                     result["isError"] = true
-                    result["errorMessage"] = when (response.code()) {
+                    result["message"] = when (response.code()) {
                         401 -> "Unauthorized - Invalid session"
                         500 -> "Internal server error"
                         else -> "Logout failed"
                     }
-                    
+                    result["errorMessage"] = result["message"] as String
+
                     // Try to parse error response
                     try {
                         response.errorBody()?.let { errorBody ->
                             val errorResponse = gson.fromJson(errorBody.charStream(), ApiClientResult::class.java)
+                            result["message"] = errorResponse.message ?: result["message"] as String
                             result["errorMessage"] = errorResponse.message ?: result["errorMessage"] as String
                         }
                     } catch (e: Exception) {
@@ -671,12 +673,13 @@ class AuthClientWrapper(
                 Log.e(TAG, "Logout error", e)
                 val result = mapOf(
                     "isError" to true,
+                    "message" to "Logout failed",
                     "errorMessage" to "Logout failed",
                     "rootCause" to e.message,
                     "httpStatusCode" to null,
                     "requestId" to requestId
                 )
-                
+
                 val jsonResult = gson.toJson(result)
                 Log.e(TAG, "Logout error: $jsonResult", e)
                 return@withContext jsonResult
@@ -723,11 +726,11 @@ class AuthClientWrapper(
             val body = response.body()!!
             tokenManager.setAccessToken(body.token)
             tokenManager.setRefreshToken(body.refreshToken)
-            
+
             // Store token expiry times if available
             body.tokenExpiry?.let { tokenManager.setTokenExpiry(it) }
             body.refreshTokenExpiry?.let { tokenManager.setRefreshTokenExpiry(it) }
-            
+
             result["loginStatus"] = body.errorReason
             result["isError"] = false
             result["message"] = "Authorization Granted"
@@ -736,18 +739,21 @@ class AuthClientWrapper(
             try {
                 if (response.errorBody() != null) {
                     val errorResponse = gson.fromJson(response.errorBody()!!.charStream(), ApiAuthResponse::class.java)
+                    result["message"] = errorResponse.errorMessage ?: "Authentication failed"
                     result["errorMessage"] = errorResponse.errorMessage ?: Constants.DEFAULT_ERROR_MESSAGE
                     result["loginStatus"] = errorResponse.errorReason
                 } else {
+                    result["message"] = "Authentication failed"
                     result["errorMessage"] = Constants.DEFAULT_ERROR_MESSAGE
                     result["loginStatus"] = ApiAuthResponse.AUTH_FAILED
                 }
             } catch (e: JsonSyntaxException) {
+                result["message"] = "Authentication failed"
                 result["errorMessage"] = Constants.DEFAULT_ERROR_MESSAGE
                 result["loginStatus"] = ApiAuthResponse.AUTH_FAILED
             }
         }
-        
+
         val jsonResult = gson.toJson(result)
         Log.d(TAG, "Auth result: $jsonResult")
         return jsonResult
@@ -762,11 +768,11 @@ class AuthClientWrapper(
             val body = response.body()!!
             tokenManager.setAccessToken(body.token)
             tokenManager.setRefreshToken(body.refreshToken)
-            
+
             // Store token expiry times if available
             body.tokenExpiry?.let { tokenManager.setTokenExpiry(it) }
             body.refreshTokenExpiry?.let { tokenManager.setRefreshTokenExpiry(it) }
-            
+
             result["loginStatus"] = body.errorReason
             result["isError"] = false
             result["message"] = "Authorization Granted"
@@ -775,18 +781,21 @@ class AuthClientWrapper(
             try {
                 if (response.errorBody() != null) {
                     val errorResponse = gson.fromJson(response.errorBody()!!.charStream(), ApiAuthResponse::class.java)
+                    result["message"] = errorResponse.errorMessage ?: "Authentication failed"
                     result["errorMessage"] = errorResponse.errorMessage ?: Constants.DEFAULT_ERROR_MESSAGE
                     result["loginStatus"] = errorResponse.errorReason
                 } else {
+                    result["message"] = "Authentication failed"
                     result["errorMessage"] = Constants.DEFAULT_ERROR_MESSAGE
                     result["loginStatus"] = ApiAuthResponse.AUTH_FAILED
                 }
             } catch (e: JsonSyntaxException) {
+                result["message"] = "Authentication failed"
                 result["errorMessage"] = Constants.DEFAULT_ERROR_MESSAGE
                 result["loginStatus"] = ApiAuthResponse.AUTH_FAILED
             }
         }
-        
+
         // Emit result via callback mechanism
         Log.d(TAG, "Auth result: ${gson.toJson(result)}")
     }
@@ -795,12 +804,13 @@ class AuthClientWrapper(
         val result = mapOf(
             "loginStatus" to ApiAuthResponse.AUTH_FAILED,
             "isError" to true,
+            "message" to "Authentication failed",
             "errorMessage" to Constants.DEFAULT_ERROR_MESSAGE,
             "rootCause" to error.message,
             "httpStatusCode" to null,
             "requestId" to requestId
         )
-        
+
         val jsonResult = gson.toJson(result)
         Log.e(TAG, "Auth error: $jsonResult", error)
         return jsonResult
@@ -810,12 +820,13 @@ class AuthClientWrapper(
         val result = mapOf(
             "loginStatus" to ApiAuthResponse.AUTH_FAILED,
             "isError" to true,
+            "message" to "Authentication failed",
             "errorMessage" to Constants.DEFAULT_ERROR_MESSAGE,
             "rootCause" to error.message,
             "httpStatusCode" to null,
             "requestId" to requestId
         )
-        
+
         Log.e(TAG, "Auth error: ${gson.toJson(result)}", error)
     }
 
