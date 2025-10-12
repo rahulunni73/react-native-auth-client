@@ -1,6 +1,6 @@
 {
   "name": "react-native-auth-client",
-  "version": "0.2.5",
+  "version": "0.2.7",
   "description": "A comprehensive React Native authentication client with cross-platform support for iOS and Android. Features TurboModule architecture, username/password and Google SSO authentication, HTTP operations, file uploads/downloads with progress tracking, automatic token management, and secure storage.",
   "main": "./lib/module/index.js",
   "types": "./lib/typescript/src/index.d.ts",
