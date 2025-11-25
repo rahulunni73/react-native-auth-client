@@ -3,7 +3,11 @@ package com.reactnativeauthclient.utils
 object Constants {
     const val BAD_TOKEN = 4
     const val BAD_TOKEN_TEXT = "Bad token"
-    
+
+    // API endpoints and options
+    const val AUTH_LOGIN_URL = "authenticate"
+    const val DOWNLOAD = "DOWNLOAD"
+
     // HTTP timeouts in seconds
     const val CONNECT_TIMEOUT = 30L
     const val READ_TIMEOUT = 60L

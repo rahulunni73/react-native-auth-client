@@ -33,15 +33,25 @@ const AuthClientTestScreen: React.FC = () => {
 
   // Configuration state
   const [config, setConfig] = useState<AuthClientConfig>({
-    baseUrl: 'https://domain.com/app/',
-    isEncryptionRequired: false,
-    clientId: '123456',
-    passPhrase: 'test-passphrase',
+    baseUrl: 'http://103.156.208.92:20080/ospyndocs/',
+    isEncryptionRequired: true,
+    clientId: 'e8f6226f4597719e78c320c73a5e3c5d',
+    passPhrase: '876a9335d006293475d7',
   });
+
+  // Toggle encryption for testing
+  const toggleEncryption = () => {
+    setConfig((prev) => ({
+      ...prev,
+      isEncryptionRequired: !prev.isEncryptionRequired,
+    }));
+    // Reset initialization when changing encryption
+    setIsInitialized(false);
+  };
 
   // Authentication state
   const [credentials, setCredentials] = useState<AuthCredentials>({
-    username: 'username',
+    username: 'MO1',
     password: 'Pass@123',
   });
 
@@ -99,7 +109,7 @@ const AuthClientTestScreen: React.FC = () => {
     setIsLoading(true);
     try {
       const result: AuthResponse = await AuthClient.authenticate(
-        '/api/authenticate-endpoint',
+        'api/authenticate',
         credentials
       );
 
@@ -152,7 +162,7 @@ const AuthClientTestScreen: React.FC = () => {
   const handleTestGet = useCallback(async () => {
     setIsLoading(true);
     try {
-      const result = await AuthClient.get('user/info/data', {
+      const result = await AuthClient.get('deep-rest/api/v1/user/info/data', {
         headers: { 'Content-Type': 'application/json' },
       });
 
@@ -177,7 +187,7 @@ const AuthClientTestScreen: React.FC = () => {
         parentNodeId: '1388041405164736513',
         sortCriteria: 'DATE_DESC',
       };
-      const result = await AuthClient.post('-endpoint', testData, {
+      const result = await AuthClient.post('deep-rest/api/v1/repo/runtime/nodes', testData, {
         headers: { 'Content-Type': 'application/json' },
       });
       showResult('POST Request Result', result);
@@ -193,7 +203,7 @@ const AuthClientTestScreen: React.FC = () => {
   const handleLogout = useCallback(async () => {
     setIsLoading(true);
     try {
-      const result: AuthResponse = await AuthClient.logout('/logout');
+      const result: AuthResponse = await AuthClient.logout('deep-rest/api/v1/logout');
       showResult('Logout Result', result);
       Alert.alert('Success', 'Logged out successfully!');
     } catch (error) {
@@ -216,9 +226,9 @@ const AuthClientTestScreen: React.FC = () => {
 
   // Create test file path
   const createTestFile = async (): Promise<string> => {
-    const fileName = `sample_invoice.pdf`;
+    const fileName = `quadratic_equation.png`;
     if (Platform.OS === 'android') {
-      return '/data/data/com.turbomoduleexample/files/Documents/saample_invoice.pdf';
+      return '/data/data/authclient.example/files/quadratic_equation.png';
     } else {
       return `Documents/${fileName}`;
     }
@@ -232,7 +242,7 @@ const AuthClientTestScreen: React.FC = () => {
 
     try {
       const filePath = await createTestFile();
-      const nodeContent = createNodeContent('folderId');
+      const nodeContent = createNodeContent('1388041405164736513');
 
       const requestBody: DeepFileUploadRequest = {
         file: {
@@ -242,7 +252,7 @@ const AuthClientTestScreen: React.FC = () => {
       };
 
       const result: FileResponse = await AuthClient.uploadFile(
-        '/file/upload',
+        'deep-rest/api/v1/repo/runtime/file/upload',
         requestBody,
         (progress: ProgressEvent) => {
           const progressPercent = Math.round(progress.progress * 100);
@@ -281,7 +291,7 @@ const AuthClientTestScreen: React.FC = () => {
     setIsLoading(true);
 
     try {
-      const fileUrl = 'user/photo/43';
+      const fileUrl = '/deep-rest/api/v1/runtime/user/photo/43';
       const downloadPath = createDownloadFilePath();
 
       const result: FileResponse = await AuthClient.downloadFile(
@@ -314,7 +324,7 @@ const AuthClientTestScreen: React.FC = () => {
     setIsLoading(true);
 
     try {
-      const fileUrl = '/file/folderId';
+      const fileUrl = 'deep-rest/api/v1/repo/runtime/file/1442669019204210688';
 
       const result: FileResponse = await AuthClient.downloadFileAsBase64(
         fileUrl,
@@ -396,6 +406,25 @@ const AuthClientTestScreen: React.FC = () => {
         Testing the published AuthClient library
       </Text>
 
+      {/* Encryption Status Badge */}
+      <View
+        style={[
+          styles.encryptionBadge,
+          config.isEncryptionRequired
+            ? styles.encryptionOn
+            : styles.encryptionOff,
+        ]}
+      >
+        <Text style={styles.encryptionBadgeText}>
+          {config.isEncryptionRequired ? '🔒 ENCRYPTION: ON' : '🔓 ENCRYPTION: OFF'}
+        </Text>
+        <Text style={styles.encryptionBadgeSubtext}>
+          {config.isEncryptionRequired
+            ? `Password: clientId | All else: passPhrase`
+            : 'All requests/responses are plain text'}
+        </Text>
+      </View>
+
       {/* Configuration Section */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Configuration</Text>
@@ -410,7 +439,7 @@ const AuthClientTestScreen: React.FC = () => {
           placeholder="https://api.example.com"
         />
 
-        <Text style={styles.label}>Client ID:</Text>
+        <Text style={styles.label}>Client ID (for password encryption):</Text>
         <TextInput
           style={styles.input}
           value={config.clientId}
@@ -418,7 +447,40 @@ const AuthClientTestScreen: React.FC = () => {
             setConfig((prev) => ({ ...prev, clientId: text }))
           }
           placeholder="client-id"
+          editable={!isInitialized}
         />
+
+        <Text style={styles.label}>Pass Phrase (for request/response encryption):</Text>
+        <TextInput
+          style={styles.input}
+          value={config.passPhrase}
+          onChangeText={(text) =>
+            setConfig((prev) => ({ ...prev, passPhrase: text }))
+          }
+          placeholder="secure-passphrase"
+          editable={!isInitialized}
+        />
+
+        <View style={styles.encryptionToggleContainer}>
+          <Text style={styles.label}>Enable Encryption:</Text>
+          <TouchableOpacity
+            style={[
+              styles.toggleButton,
+              config.isEncryptionRequired && styles.toggleButtonActive,
+            ]}
+            onPress={toggleEncryption}
+            disabled={isInitialized}
+          >
+            <Text
+              style={[
+                styles.toggleButtonText,
+                config.isEncryptionRequired && styles.toggleButtonTextActive,
+              ]}
+            >
+              {config.isEncryptionRequired ? 'ON' : 'OFF'}
+            </Text>
+          </TouchableOpacity>
+        </View>
 
         <TouchableOpacity
           style={[styles.button, isInitialized && styles.buttonDisabled]}
@@ -429,12 +491,30 @@ const AuthClientTestScreen: React.FC = () => {
             {isInitialized ? 'Already Initialized' : 'Initialize Client'}
           </Text>
         </TouchableOpacity>
+
+        {isInitialized && (
+          <Text style={styles.infoText}>
+            ℹ️ Encryption is {config.isEncryptionRequired ? 'ACTIVE' : 'DISABLED'}.
+            Change encryption settings requires re-initialization.
+          </Text>
+        )}
       </View>
 
       {/* Authentication Section */}
       {isInitialized && (
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Authentication</Text>
+
+          {config.isEncryptionRequired && (
+            <View style={styles.encryptionInfo}>
+              <Text style={styles.encryptionInfoText}>
+                🔒 Password will be encrypted using <Text style={styles.bold}>clientId</Text>
+              </Text>
+              <Text style={styles.encryptionInfoText}>
+                🔓 Response will be decrypted using <Text style={styles.bold}>passPhrase</Text>
+              </Text>
+            </View>
+          )}
 
           <Text style={styles.subSectionTitle}>Username/Password Login</Text>
           <Text style={styles.label}>Username:</Text>
@@ -508,6 +588,20 @@ const AuthClientTestScreen: React.FC = () => {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>HTTP Operations</Text>
 
+          {config.isEncryptionRequired && (
+            <View style={styles.encryptionInfo}>
+              <Text style={styles.encryptionInfoText}>
+                🔒 POST: Request body encrypted with <Text style={styles.bold}>passPhrase</Text>
+              </Text>
+              <Text style={styles.encryptionInfoText}>
+                🔓 GET/POST: Response decrypted with <Text style={styles.bold}>passPhrase</Text>
+              </Text>
+              <Text style={styles.encryptionInfoText}>
+                ℹ️ GET requests have no body encryption (no body to encrypt)
+              </Text>
+            </View>
+          )}
+
           <TouchableOpacity
             style={styles.button}
             onPress={handleGetClientInfo}
@@ -546,6 +640,20 @@ const AuthClientTestScreen: React.FC = () => {
       {isInitialized && (
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>File Operations</Text>
+
+          {config.isEncryptionRequired && (
+            <View style={styles.encryptionInfo}>
+              <Text style={styles.encryptionInfoText}>
+                🔒 Upload: Metadata fields encrypted with <Text style={styles.bold}>passPhrase</Text>
+              </Text>
+              <Text style={styles.encryptionInfoText}>
+                📁 Upload: File content sent as multipart (not encrypted)
+              </Text>
+              <Text style={styles.encryptionInfoText}>
+                📥 Download: Binary files skip encryption/decryption
+              </Text>
+            </View>
+          )}
 
           <TouchableOpacity
             style={[
@@ -785,6 +893,87 @@ const styles = StyleSheet.create({
   progressFill: {
     height: '100%',
     backgroundColor: '#28a745',
+    borderRadius: 4,
+  },
+  // Encryption Badge Styles
+  encryptionBadge: {
+    padding: 16,
+    marginBottom: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+    borderWidth: 2,
+  },
+  encryptionOn: {
+    backgroundColor: '#e8f5e9',
+    borderColor: '#4caf50',
+  },
+  encryptionOff: {
+    backgroundColor: '#fff3e0',
+    borderColor: '#ff9800',
+  },
+  encryptionBadgeText: {
+    fontSize: 18,
+    fontWeight: '700',
+    marginBottom: 4,
+    color: '#333',
+  },
+  encryptionBadgeSubtext: {
+    fontSize: 12,
+    color: '#666',
+    textAlign: 'center',
+  },
+  // Encryption Toggle Styles
+  encryptionToggleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  toggleButton: {
+    backgroundColor: '#e0e0e0',
+    paddingHorizontal: 24,
+    paddingVertical: 8,
+    borderRadius: 20,
+    minWidth: 80,
+    alignItems: 'center',
+  },
+  toggleButtonActive: {
+    backgroundColor: '#4caf50',
+  },
+  toggleButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#666',
+  },
+  toggleButtonTextActive: {
+    color: '#fff',
+  },
+  // Encryption Info Box Styles
+  encryptionInfo: {
+    backgroundColor: '#e3f2fd',
+    padding: 12,
+    borderRadius: 6,
+    marginBottom: 16,
+    borderLeftWidth: 4,
+    borderLeftColor: '#2196f3',
+  },
+  encryptionInfoText: {
+    fontSize: 13,
+    color: '#1565c0',
+    marginBottom: 6,
+    lineHeight: 18,
+  },
+  bold: {
+    fontWeight: '700',
+    color: '#0d47a1',
+  },
+  infoText: {
+    fontSize: 12,
+    color: '#666',
+    fontStyle: 'italic',
+    marginTop: 8,
+    padding: 8,
+    backgroundColor: '#f5f5f5',
     borderRadius: 4,
   },
 });

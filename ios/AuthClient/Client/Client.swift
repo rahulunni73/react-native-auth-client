@@ -20,12 +20,19 @@ public struct Client {
   // Network configuration properties
   static var defaultTimeout: TimeInterval = 30.0
   static var maxRetries: Int = 3
+
+  // Enable logging by default in DEBUG builds
+  #if DEBUG
+  static var enableLogging: Bool = true
+  #else
   static var enableLogging: Bool = false
-  
+  #endif
+
   // Private initializer to ensure only one instance is created
   private init() {
     #if DEBUG
     print("Modern Client initialized - No Alamofire dependency")
+    print("✅ Debug logging is enabled by default in DEBUG builds")
     #endif
   }
   

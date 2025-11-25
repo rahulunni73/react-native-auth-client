@@ -8,7 +8,7 @@ import Foundation
 
 struct AuthClientConstants {
 
-
+  // Authentication status codes
   public static let AUTH_SUCCESS:Int = 0;
 
   public static let AUTH_FAILED:Int = 1;
@@ -18,9 +18,14 @@ struct AuthClientConstants {
   public static let INTERNAL_ERROR:Int = 3;
 
   public static let BAD_TOKEN:Int = 4;
-  
-  
-  
+
+  // Network constants
+  public static let DOWNLOAD = "DOWNLOAD"
+
+  public static let AUTH_LOGIN_URL = "authenticate"
+
+  public static let BAD_TOKEN_TEXT = "Bad token"
+
 }
 
 

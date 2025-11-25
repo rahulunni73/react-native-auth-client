@@ -354,6 +354,170 @@ The library supports both React Native architectures:
 - **Old Architecture**: Standard RCTEventEmitter with promise-based methods
 - **New Architecture**: Full TurboModule protocol conformance
 
+## Encryption
+
+When `isEncryptionRequired` is set to `true` in the configuration, the library automatically handles encryption and decryption of requests and responses using PBKDF2-AES-GCM encryption.
+
+### Encryption Rules
+
+| Operation | Request Encryption | Response Decryption | Encryption Key |
+|-----------|-------------------|---------------------|----------------|
+| **Authentication** | Password only | Full response | `clientId` (password)<br/>`passPhrase` (response) |
+| **POST Requests** | Full body | If `encryptedContent` exists | `passPhrase` |
+| **GET Requests** | None | If `encryptedContent` exists | `passPhrase` |
+| **File Upload** | Metadata fields | If `encryptedContent` exists | `passPhrase` |
+| **File Download** | None | None (binary data) | N/A |
+
+### How It Works
+
+#### Authentication Flow
+```typescript
+// 1. Initialize with encryption enabled
+const config = {
+  baseUrl: 'https://api.example.com/',
+  isEncryptionRequired: true,
+  clientId: 'your-client-id',
+  passPhrase: 'your-secure-passphrase',
+};
+
+await AuthClient.initialize(config);
+
+// 2. Authenticate - password encrypted with clientId
+const result = await AuthClient.authenticate('/auth/login', {
+  username: 'user@example.com',
+  password: 'mypassword',  // Encrypted using clientId
+});
+// Response decrypted using passPhrase
+```
+
+**What happens:**
+1. Password is encrypted using `clientId` as the encryption key
+2. Request sent as form data with encrypted password
+3. Server responds with `{"encryptedContent": "..."}`
+4. Response decrypted using `passPhrase`
+
+#### POST Request Flow
+```typescript
+// POST with encryption enabled
+const data = {
+  name: 'John Doe',
+  email: 'john@example.com',
+  sensitive: 'data'
+};
+
+const response = await AuthClient.post('api/users', data);
+```
+
+**What happens:**
+1. Request body serialized to JSON
+2. JSON encrypted using `passPhrase` → `{"encryptedContent": "base64..."}`
+3. Server receives encrypted body, decrypts, processes
+4. Server encrypts response → `{"encryptedContent": "base64..."}`
+5. Client decrypts response using `passPhrase`
+
+#### GET Request Flow
+```typescript
+// GET with encryption enabled
+const response = await AuthClient.get('api/user/profile');
+```
+
+**What happens:**
+1. Request sent without encryption (GET has no body)
+2. Server processes request
+3. Server encrypts response → `{"encryptedContent": "base64..."}`
+4. Client decrypts response using `passPhrase`
+
+#### File Operations
+
+**Upload:**
+```typescript
+const request = {
+  file: { fileContent: '/path/to/file.pdf' },
+  node: { parentNodeId: '123', name: 'document.pdf' },
+};
+
+await AuthClient.uploadFile('api/upload', request);
+```
+- File content sent as multipart/form-data (not encrypted)
+- Metadata fields (`node`) encrypted using `passPhrase`
+- Response decrypted if `encryptedContent` present
+
+**Download (Binary):**
+```typescript
+// Add special header to skip encryption/decryption
+const response = await AuthClient.downloadFile(
+  'api/files/photo.jpg',
+  '/path/to/save',
+  { headers: { 'option': 'DOWNLOAD' } }  // Skip encryption
+);
+```
+- Binary files skip encryption/decryption
+- Use `option: "DOWNLOAD"` header for binary downloads
+
+### Encryption Format
+
+**Request Format (POST):**
+```json
+{
+  "encryptedContent": "base64_encrypted_data_here"
+}
+```
+
+**Response Format (All Methods):**
+```json
+{
+  "encryptedContent": "base64_encrypted_data_here"
+}
+```
+
+OR plain response (when encryption not required):
+```json
+{
+  "message": "Success",
+  "data": { ... }
+}
+```
+
+### Implementation Details
+
+**Android:**
+- Uses `EncryptionInterceptor` for automatic encryption/decryption
+- Intercepts all requests/responses at OkHttp layer
+- Handles FormBody for auth, RequestBody for general requests
+
+**iOS:**
+- Encryption/decryption in `ModernClientWrapper` methods
+- Per-request encryption check
+- Separate handling for auth (clientId) vs general requests (passPhrase)
+
+### Server Requirements
+
+Your server must:
+1. Support encrypted request bodies in format: `{"encryptedContent": "..."}`
+2. Return encrypted responses in format: `{"encryptedContent": "..."}`
+3. Use PBKDF2-AES-GCM for encryption/decryption
+4. Use `passPhrase` for decryption (except auth password uses `clientId`)
+
+### Debugging Encryption
+
+Enable debug logging to see encryption details:
+
+**iOS (Xcode Console):**
+```
+🔒 POST Request Encryption Enabled
+🔒 Original body size: 156 chars
+🔒 Encrypted body size: 248 chars
+🔓 Response Decryption Successful
+🔓 Encrypted content size: 312 chars
+```
+
+**Android (Logcat):**
+```
+EncryptionInterceptor: Authentication Request
+EncryptionInterceptor: General API Request: POST
+EncryptionInterceptor: Response Decryption Successful
+```
+
 ### Security Features
 
 - **Token Storage**: iOS Keychain / Android EncryptedSharedPreferences
@@ -388,6 +552,18 @@ npx react-native run-android
 MIT
 
 ## Changelog
+
+### v0.2.8
+- **Complete PBKDF2 encryption implementation** with cross-platform consistency
+- Added EncryptionInterceptor for Android (centralized encryption logic)
+- Fixed iOS form URL encoding for Base64 strings in encrypted requests
+- Token clearing before authentication to prevent session interference
+- Disabled URLSession credential storage on iOS for better security
+- Comprehensive error handling - graceful responses without crashes
+- Enhanced debug logging with emoji indicators (🔐 🔓 📥 📤)
+- Added constants for DOWNLOAD option (cross-platform consistency)
+- Updated example app with encryption toggle and status indicators
+- **100% cross-platform consistency** verified between iOS and Android
 
 ### v0.2.0
 - Added iOS singleton pattern support for custom native modules

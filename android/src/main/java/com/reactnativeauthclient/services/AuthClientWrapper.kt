@@ -6,6 +6,7 @@ import com.facebook.react.bridge.ReactApplicationContext
 import com.google.gson.Gson
 import com.google.gson.JsonSyntaxException
 import com.reactnativeauthclient.crypto.PBKDF2EncryptionModule
+import com.reactnativeauthclient.interceptors.EncryptionInterceptor
 import com.reactnativeauthclient.models.ApiAuthResponse
 import com.reactnativeauthclient.models.ApiClientResult
 import com.reactnativeauthclient.utils.Constants
@@ -37,19 +38,19 @@ class AuthClientWrapper(
     private val gson = Gson()
     private val tokenManager = TokenManager(context)
     private val encryptionModule = PBKDF2EncryptionModule()
-    
+
     // Client configuration
     private var baseUrl: String = ""
     private var isEncryptionRequired: Boolean = false
     private var clientId: String = ""
     private var passPhrase: String = ""
-    
+
     // Active requests for cancellation support
     private val activeRequests = ConcurrentHashMap<String, Job>()
-    
+
     // Token refresh service
     private var tokenRefreshService: TokenRefreshService? = null
-    
+
     // OkHttp client with interceptors
     private val okHttpClient: OkHttpClient by lazy {
         OkHttpClient.Builder()
@@ -57,13 +58,19 @@ class AuthClientWrapper(
             .readTimeout(Constants.READ_TIMEOUT, TimeUnit.SECONDS)
             .writeTimeout(Constants.WRITE_TIMEOUT, TimeUnit.SECONDS)
             .addInterceptor(AuthInterceptor())
+            .addInterceptor(EncryptionInterceptor(
+                encryptionModule = encryptionModule,
+                getClientId = { clientId },
+                getPassPhrase = { passPhrase },
+                isEncryptionRequired = { isEncryptionRequired }
+            ))
             .authenticator(TokenAuthenticator())
             .build()
     }
-    
+
     // Retrofit service - created after initialization
     private var apiService: ApiService? = null
-    
+
     private fun getApiService(): ApiService {
         if (apiService == null) {
             val finalBaseUrl = if (baseUrl.isNotEmpty()) {
@@ -71,7 +78,7 @@ class AuthClientWrapper(
             } else {
                 throw IllegalStateException("AuthClient not initialized. Call initializeClient() first.")
             }
-            
+
             apiService = Retrofit.Builder()
                 .baseUrl(finalBaseUrl)
                 .client(okHttpClient)
@@ -81,12 +88,12 @@ class AuthClientWrapper(
         }
         return apiService!!
     }
-    
+
     private fun buildUrl(endpoint: String): String {
         val finalBaseUrl = if (baseUrl.endsWith("/")) baseUrl else "$baseUrl/"
         val cleanEndpoint = if (endpoint.startsWith("/")) endpoint.substring(1) else endpoint
         val fullUrl = "$finalBaseUrl$cleanEndpoint"
-        
+
         Log.d(TAG, "Building URL: baseUrl='$baseUrl' + endpoint='$endpoint' = '$fullUrl'")
         return fullUrl
     }
@@ -112,7 +119,7 @@ class AuthClientWrapper(
                 }
 
                 this@AuthClientWrapper.isEncryptionRequired = isEncryptionRequired
-                
+
                 if (isEncryptionRequired) {
                     if (clientId.isNotEmpty() && passPhrase.isNotEmpty()) {
                         this@AuthClientWrapper.clientId = clientId
@@ -175,15 +182,18 @@ class AuthClientWrapper(
     ): String {
         return withContext(Dispatchers.IO) {
             try {
+                // Clear old tokens before authentication to prevent interference from previous sessions
+                tokenManager.clearTokens()
+
                 val fullUrl = buildUrl(endpoint)
                 val service = getApiService()
-                
+
                 val response = if (isEncryptionRequired) {
                     service.authenticateWithEncryption(fullUrl, username, password, clientId)
                 } else {
                     service.authenticate(fullUrl, username, password)
                 }
-                
+
                 processAuthResponse(response, requestId)
             } catch (e: Exception) {
                 processAuthError(e, requestId)
@@ -199,15 +209,18 @@ class AuthClientWrapper(
     ): String {
         return withContext(Dispatchers.IO) {
             try {
+                // Clear old tokens before authentication to prevent interference from previous sessions
+                tokenManager.clearTokens()
+
                 val fullUrl = buildUrl(endpoint)
                 val service = getApiService()
-                
+
                 val response = if (isEncryptionRequired) {
                     service.googleAuthenticateWithEncryption(fullUrl, username, idToken, clientId)
                 } else {
                     service.googleAuthenticate(fullUrl, username, idToken)
                 }
-                
+
                 processAuthResponse(response, requestId)
             } catch (e: Exception) {
                 processAuthError(e, requestId)
@@ -227,7 +240,7 @@ class AuthClientWrapper(
                 val service = getApiService()
                 val headers: Map<String, String> = requestConfig.filterValues { it is String }
                     .mapValues { it.value.toString() }
-                
+
                 val response = service.executeGet(fullUrl, headers)
                 processHttpResponse(response, requestId)
             } catch (e: Exception) {
@@ -246,16 +259,11 @@ class AuthClientWrapper(
             try {
                 val headers: Map<String, String> = requestConfig.filterValues { it is String }
                     .mapValues { it.value.toString() }
-                
-                val body = if (isEncryptionRequired) {
-                    encryptRequestBody(requestBody)
-                } else {
-                    requestBody
-                }
-                
+
+                // Encryption is now handled by EncryptionInterceptor
                 val fullUrl = buildUrl(url)
                 val service = getApiService()
-                val response = service.executePost(fullUrl, body, headers)
+                val response = service.executePost(fullUrl, requestBody, headers)
                 processHttpResponse(response, requestId)
             } catch (e: Exception) {
                 processHttpError(e, requestId)
@@ -274,28 +282,28 @@ class AuthClientWrapper(
                 // Handle file upload with progress tracking
                 val parts = mutableListOf<MultipartBody.Part>()
                 val formData = mutableMapOf<String, RequestBody>()
-                
+
                 Log.d(TAG, "📤 [DEBUG] Starting file upload process")
                 Log.d(TAG, "📤 [DEBUG] Request body: ${gson.toJson(requestBody)}")
                 Log.d(TAG, "📤 [DEBUG] URL endpoint: $url")
-                
+
                 // Process file data
                 if (requestBody.containsKey("file")) {
                     val fileData = requestBody["file"] as? Map<String, Any>
                     Log.d(TAG, "📤 [DEBUG] File data found: ${gson.toJson(fileData)}")
-                    
+
                     fileData?.forEach { (key, value) ->
                         val filePath = value.toString()
                         val file = File(filePath)
-                        
+
                         Log.d(TAG, "📤 [DEBUG] Processing file: $filePath")
                         Log.d(TAG, "📤 [DEBUG] File exists: ${file.exists()}")
                         Log.d(TAG, "📤 [DEBUG] File path: ${file.absolutePath}")
-                        
+
                         if (file.exists()) {
                             Log.d(TAG, "📤 [DEBUG] File found, creating upload part")
                             Log.d(TAG, "📤 [DEBUG] File size: ${file.length()} bytes")
-                            
+
                             val requestFile = ProgressRequestBody(
                                 file,
                                 "application/octet-stream".toMediaType(),
@@ -318,7 +326,7 @@ class AuthClientWrapper(
                         }
                     }
                 }
-                
+
                 // Process other form data
                 Log.d(TAG, "📤 [DEBUG] Processing additional form data")
                 requestBody.filter { it.key != "file" }.forEach { (key, value) ->
@@ -332,7 +340,7 @@ class AuthClientWrapper(
                     }
                     formData[key] = processedValue.toRequestBody("application/json".toMediaType())
                 }
-                
+
                 if (parts.isEmpty()) {
                     Log.e(TAG, "📤 [DEBUG] No valid files found for upload")
                     val result = mutableMapOf<String, Any>()
@@ -342,7 +350,7 @@ class AuthClientWrapper(
                     result["requestId"] = requestId
                     return@withContext gson.toJson(result)
                 }
-                
+
                 Log.d(TAG, "📤 [DEBUG] Making upload request with ${parts.size} file(s)")
                 val fullUrl = buildUrl(url)
                 val service = getApiService()
@@ -351,10 +359,10 @@ class AuthClientWrapper(
                 } else {
                     service.upload(fullUrl, formData)
                 }
-                
+
                 Log.d(TAG, "📤 [DEBUG] Upload request completed with status: ${response.code()}")
                 return@withContext processFileUploadResponse(response, requestId)
-                
+
             } catch (e: Exception) {
                 Log.e(TAG, "📤 [DEBUG] Upload failed with exception: ${e.message}", e)
                 return@withContext processFileUploadError(e, requestId)
@@ -371,45 +379,49 @@ class AuthClientWrapper(
     ): String {
         return withContext(Dispatchers.IO) {
             try {
-                val headers = requestConfig.filterValues { it is String }
-                    .mapValues { it.value.toString() }
-                
+                // Add DOWNLOAD option to skip encryption/decryption for binary files
+                val headers = requestConfig.toMutableMap().apply {
+                    put("option", Constants.DOWNLOAD)
+                }.filterValues { it is String }.mapValues { it.value.toString() }
+
                 // Get the app's Documents directory (ignore incoming destinationPath)
                 val documentsDir = File(context.filesDir, "Documents")
-                
+
                 // Create downloads directory inside Documents
                 val downloadsDir = File(documentsDir, "downloads")
                 if (!downloadsDir.exists()) {
                     downloadsDir.mkdirs()
                     Log.d(TAG, "Created downloads directory at: ${downloadsDir.absolutePath}")
                 }
-                
+
                 val fullUrl = buildUrl(url)
                 val service = getApiService()
+
+
                 val response = service.downloadFile(fullUrl, headers)
-                
+
                 if (response.isSuccessful && response.body() != null) {
                     val responseBody = response.body()!!
-                    
+
                     // Extract filename from URL or use timestamp-based naming
                     val fileName = extractFileName(url)
-                    
+
                     // Ensure unique filename by adding counter if file already exists
                     val finalFileName = getUniqueFileName(downloadsDir, fileName)
                     val finalFile = File(downloadsDir, finalFileName)
-                    
+
                     // Write file data
                     responseBody.byteStream().use { inputStream ->
                         finalFile.outputStream().use { outputStream ->
                             inputStream.copyTo(outputStream)
                         }
                     }
-                    
+
                     // Verify file was written successfully
                     if (!finalFile.exists()) {
                         throw IOException("Failed to write file to destination")
                     }
-                    
+
                     val result = mutableMapOf<String, Any>()
                     result["httpStatusCode"] = response.code()
                     result["requestId"] = requestId
@@ -417,14 +429,14 @@ class AuthClientWrapper(
                     result["message"] = "File downloaded successfully"
                     result["filePath"] = finalFile.absolutePath
                     result["fileSize"] = finalFile.length()
-                    
+
                     Log.d(TAG, "📥 File downloaded successfully")
                     Log.d(TAG, "📥 Endpoint: $url")
                     Log.d(TAG, "📥 Final filename: $finalFileName")
                     Log.d(TAG, "📥 Ignored incoming path: $destinationPath")
                     Log.d(TAG, "📥 Created fresh path: ${finalFile.absolutePath}")
                     Log.d(TAG, "📥 File size: ${finalFile.length()} bytes")
-                    
+
                     return@withContext gson.toJson(result)
                 } else {
                     val result = mutableMapOf<String, Any>()
@@ -432,7 +444,7 @@ class AuthClientWrapper(
                     result["requestId"] = requestId
                     result["isError"] = true
                     result["errorMessage"] = "File download failed"
-                    
+
                     return@withContext gson.toJson(result)
                 }
             } catch (e: Exception) {
@@ -450,23 +462,23 @@ class AuthClientWrapper(
             try {
                 val headers = requestConfig.filterValues { it is String }
                     .mapValues { it.value.toString() }
-                
+
                 val fullUrl = buildUrl(url)
                 val service = getApiService()
                 val response = service.download(fullUrl, headers)
-                
+
                 if (response.isSuccessful && response.body() != null) {
                     val responseBody = response.body()!!
-                    
+
                     val body = responseBody
-                    
+
                     // Handle Base64 download response with iOS-like structure
                     val result = mutableMapOf<String, Any>()
                     result["httpStatusCode"] = response.code()
                     result["requestId"] = requestId
                     result["isError"] = false
                     result["message"] = body.message ?: "File downloaded successfully"
-                    
+
                     // Handle the response data structure
                     val responseData = body.apiResponse ?: body.data
                     if (responseData is Map<*, *>) {
@@ -479,16 +491,16 @@ class AuthClientWrapper(
                             val contentType = dataObject["content-type"] as? String ?: "application/octet-stream"
                             val contentDisposition = dataObject["content-disposition"] as? String
                             val nodeVersion = dataObject["nodeVersion"] as? String
-                            
+
                             result["data"] = base64Content
                             result["fileSize"] = contentSize
                             result["fileName"] = fileName
                             result["contentType"] = contentType
-                            
+
                             // Include optional metadata if available
                             contentDisposition?.let { result["contentDisposition"] = it }
                             nodeVersion?.let { result["nodeVersion"] = it }
-                            
+
                             Log.d(TAG, "📥 Base64 download successful")
                             Log.d(TAG, "📥 Endpoint: $url")
                             Log.d(TAG, "📥 File name: $fileName")
@@ -503,7 +515,7 @@ class AuthClientWrapper(
                         // Handle other data types - convert to safe type
                         result["data"] = responseData?.toString() ?: ""
                     }
-                    
+
                     return@withContext gson.toJson(result)
                 } else {
                     val result = mutableMapOf<String, Any>()
@@ -511,7 +523,7 @@ class AuthClientWrapper(
                     result["requestId"] = requestId
                     result["isError"] = true
                     result["errorMessage"] = "Base64 file download failed"
-                    
+
                     return@withContext gson.toJson(result)
                 }
             } catch (e: Exception) {
@@ -529,45 +541,45 @@ class AuthClientWrapper(
         return withContext(Dispatchers.IO) {
             try {
                 val headers = requestConfig.toMutableMap().apply {
-                    put("option", "download")
+                    put("option", Constants.DOWNLOAD)
                 }.filterValues { it is String }.mapValues { it.value.toString() }
-                
+
                 // Get the temporary directory for temporary file downloads (like iOS)
                 val tempDirectory = File(context.cacheDir, "tmp")
-                
-                // Create downloads directory inside temp directory  
+
+                // Create downloads directory inside temp directory
                 val downloadsDir = File(tempDirectory, "downloads")
                 if (!downloadsDir.exists()) {
                     downloadsDir.mkdirs()
                     Log.d(TAG, "Created temporary downloads directory at: ${downloadsDir.absolutePath}")
                 }
-                
+
                 val fullUrl = buildUrl(url)
                 val service = getApiService()
                 val response = service.downloadFilePost(fullUrl, headers)
-                
+
                 if (response.isSuccessful && response.body() != null) {
                     val responseBody = response.body()!!
-                    
+
                     // Extract filename from URL or use timestamp-based naming
                     val fileName = extractFileName(url)
-                    
+
                     // Ensure unique filename by adding counter if file already exists
                     val finalFileName = getUniqueFileName(downloadsDir, fileName)
                     val finalFile = File(downloadsDir, finalFileName)
-                    
+
                     // Write file data
                     responseBody.byteStream().use { inputStream ->
                         finalFile.outputStream().use { outputStream ->
                             inputStream.copyTo(outputStream)
                         }
                     }
-                    
+
                     // Verify file was written successfully
                     if (!finalFile.exists()) {
                         throw IOException("Failed to write file to destination")
                     }
-                    
+
                     val result = mutableMapOf<String, Any>()
                     result["httpStatusCode"] = response.code()
                     result["requestId"] = requestId
@@ -575,13 +587,13 @@ class AuthClientWrapper(
                     result["message"] = "File downloaded successfully"
                     result["filePath"] = finalFile.absolutePath
                     result["fileSize"] = finalFile.length()
-                    
+
                     Log.d(TAG, "📥 File downloaded successfully with POST to temp directory")
                     Log.d(TAG, "📥 Endpoint: $url")
                     Log.d(TAG, "📥 Final filename: $finalFileName")
                     Log.d(TAG, "📥 Temp file path: ${finalFile.absolutePath}")
                     Log.d(TAG, "📥 File size: ${finalFile.length()} bytes")
-                    
+
                     return@withContext gson.toJson(result)
                 } else {
                     val result = mutableMapOf<String, Any>()
@@ -589,7 +601,7 @@ class AuthClientWrapper(
                     result["requestId"] = requestId
                     result["isError"] = true
                     result["errorMessage"] = "POST file download failed"
-                    
+
                     return@withContext gson.toJson(result)
                 }
             } catch (e: Exception) {
@@ -605,7 +617,7 @@ class AuthClientWrapper(
                 // Get current tokens
                 val bearerToken = tokenManager.getAccessToken()
                 val refreshToken = tokenManager.getRefreshToken()
-                
+
                 // Prepare request body with tokens
                 val requestBody = mutableMapOf<String, Any>()
                 if (!bearerToken.isNullOrEmpty()) {
@@ -614,18 +626,12 @@ class AuthClientWrapper(
                 if (!refreshToken.isNullOrEmpty()) {
                     requestBody["refreshToken"] = refreshToken
                 }
-                
-                // Handle encryption if required
-                val body = if (isEncryptionRequired) {
-                    encryptRequestBody(requestBody)
-                } else {
-                    requestBody
-                }
-                
+
+                // Encryption is now handled by EncryptionInterceptor
                 val fullUrl = buildUrl(url)
                 val service = getApiService()
-                val response = service.executePost(fullUrl, body, emptyMap())
-                
+                val response = service.executePost(fullUrl, requestBody, emptyMap())
+
                 // Process response similar to iOS structure
                 val result = mutableMapOf<String, Any>()
                 result["httpStatusCode"] = response.code()
@@ -634,11 +640,11 @@ class AuthClientWrapper(
                 if (response.isSuccessful) {
                     // Clear tokens after successful logout
                     tokenManager.clearTokens()
-                    
+
                     result["isError"] = false
                     result["message"] = "Logout successful"
                     result["isLoggedOut"] = true
-                    
+
                     // Include response data if available
                     response.body()?.let { responseBody ->
                         responseBody.data?.let { data -> result["data"] = data }
@@ -664,11 +670,11 @@ class AuthClientWrapper(
                         // Keep default error message
                     }
                 }
-                
+
                 val jsonResult = gson.toJson(result)
                 Log.d(TAG, "Logout result: $jsonResult")
                 return@withContext jsonResult
-                
+
             } catch (e: Exception) {
                 Log.e(TAG, "Logout error", e)
                 val result = mapOf(
@@ -697,16 +703,16 @@ class AuthClientWrapper(
         activeRequests.values.forEach { it.cancel() }
         activeRequests.clear()
     }
-    
+
     // Public access methods for external modules
     fun getBaseUrl(): String = baseUrl
-    
+
     fun getClientId(): String = clientId
-    
+
     fun isEncryptionRequired(): Boolean = isEncryptionRequired
-    
+
     fun isInitialized(): Boolean = baseUrl.isNotEmpty()
-    
+
     fun getConfigurationInfo(): Map<String, Any> {
         return mapOf(
             "baseUrl" to baseUrl,
@@ -839,7 +845,7 @@ class AuthClientWrapper(
             val body = response.body()!!
             result["isError"] = false
             result["message"] = body.message ?: "Request successful"
-            
+
             // Handle encrypted/non-encrypted response data
             val apiResponse = body.apiResponse
             val data = body.data
@@ -854,7 +860,7 @@ class AuthClientWrapper(
                 else -> result["errorMessage"] = Constants.DEFAULT_ERROR_MESSAGE
             }
         }
-        
+
         val jsonResult = gson.toJson(result)
         Log.d(TAG, "HTTP result: $jsonResult")
         return jsonResult
@@ -868,7 +874,7 @@ class AuthClientWrapper(
             "httpStatusCode" to null,
             "requestId" to requestId
         )
-        
+
         val jsonResult = gson.toJson(result)
         Log.e(TAG, "HTTP error: $jsonResult", error)
         return jsonResult
@@ -884,16 +890,16 @@ class AuthClientWrapper(
             val body = response.body()!!
             Log.d(TAG, "📤 [DEBUG] Upload successful - Status: ${response.code()}")
             Log.d(TAG, "📤 [DEBUG] Response body: ${gson.toJson(body)}")
-            
+
             result["isError"] = false
             result["message"] = body.message ?: "File uploaded successfully"
-            
+
             // Include additional response data if available
             body.apiResponse?.let { result["data"] = it }
             body.data?.let { data ->
                 if (result["data"] == null) result["data"] = data
             }
-            
+
             // Add file-specific properties if available in response
             if (body.apiResponse is Map<*, *>) {
                 val responseData = body.apiResponse as Map<String, Any>
@@ -904,16 +910,16 @@ class AuthClientWrapper(
         } else {
             Log.e(TAG, "📤 [DEBUG] Upload failed - Status: ${response.code()}")
             result["isError"] = true
-            
+
             try {
                 if (response.errorBody() != null) {
                     val errorBody = response.errorBody()!!.string()
                     Log.e(TAG, "📤 [DEBUG] Error body: $errorBody")
-                    
+
                     // Try to parse error response
                     val errorResponse = gson.fromJson(errorBody, Map::class.java)
-                    result["errorMessage"] = (errorResponse?.get("message") as? String) 
-                        ?: (errorResponse?.get("error") as? String) 
+                    result["errorMessage"] = (errorResponse?.get("message") as? String)
+                        ?: (errorResponse?.get("error") as? String)
                         ?: "File upload failed"
                 } else {
                     result["errorMessage"] = "File upload failed"
@@ -930,7 +936,7 @@ class AuthClientWrapper(
                 }
             }
         }
-        
+
         val jsonResult = gson.toJson(result)
         Log.d(TAG, "📤 [DEBUG] Final upload result: $jsonResult")
         return jsonResult
@@ -938,12 +944,12 @@ class AuthClientWrapper(
 
     private suspend fun processFileUploadError(error: Throwable, requestId: String): String {
         Log.e(TAG, "📤 [DEBUG] Processing upload error: ${error.message}", error)
-        
+
         val result = mutableMapOf<String, Any>()
         result["isError"] = true
         result["httpStatusCode"] = 400
         result["requestId"] = requestId
-        
+
         // Provide specific error messages based on error type
         result["errorMessage"] = when {
             error is IOException && error.message?.contains("File not found") == true -> {
@@ -962,7 +968,7 @@ class AuthClientWrapper(
                 "Upload failed: ${error.message ?: "Unknown error"}"
             }
         }
-        
+
         val jsonResult = gson.toJson(result)
         Log.e(TAG, "📤 [DEBUG] Final upload error: $jsonResult")
         return jsonResult
@@ -982,7 +988,7 @@ class AuthClientWrapper(
             result["isError"] = true
             result["errorMessage"] = "File download failed"
         }
-        
+
         val jsonResult = gson.toJson(result)
         Log.d(TAG, "File download result: $jsonResult")
         return jsonResult
@@ -1002,7 +1008,7 @@ class AuthClientWrapper(
             result["isError"] = true
             result["errorMessage"] = "Base64 download failed"
         }
-        
+
         val jsonResult = gson.toJson(result)
         Log.d(TAG, "Base64 download result: $jsonResult")
         return jsonResult
@@ -1016,7 +1022,7 @@ class AuthClientWrapper(
             "httpStatusCode" to null,
             "requestId" to requestId
         )
-        
+
         val jsonResult = gson.toJson(result)
         Log.e(TAG, "File error: $jsonResult", error)
         return jsonResult
@@ -1031,7 +1037,7 @@ class AuthClientWrapper(
             val body = response.body()!!
             result["isError"] = false
             result["message"] = body.message ?: "Request successful"
-            
+
             // Handle encrypted/non-encrypted response data
             val apiResponse = body.apiResponse
             val data = body.data
@@ -1064,7 +1070,7 @@ class AuthClientWrapper(
                 }
             }
         }
-        
+
         Log.d(TAG, "HTTP result: ${gson.toJson(result)}")
     }
 
@@ -1076,7 +1082,7 @@ class AuthClientWrapper(
             "httpStatusCode" to null,
             "requestId" to requestId
         )
-        
+
         Log.e(TAG, "HTTP error: ${gson.toJson(result)}", error)
     }
 
@@ -1090,11 +1096,11 @@ class AuthClientWrapper(
         val result = mutableMapOf<String, Any>()
         result["httpStatusCode"] = response.code()
         result["requestId"] = requestId
-        
+
         if (response.isSuccessful && response.body() != null) {
             // Handle file download with progress tracking
             val contentType = response.body()!!.contentType()?.toString() ?: "application/octet-stream"
-            
+
             if (contentType.startsWith("application/json")) {
                 // Handle JSON error response
                 val responseString = response.body()!!.string()
@@ -1105,7 +1111,7 @@ class AuthClientWrapper(
                 try {
                     val fileName = requestBody["fileName"]?.toString() ?: generateFileName(contentType)
                     val fileResult = writeResponseBodyToDisk(response.body()!!, destinationPath, fileName, requestId)
-                    
+
                     result["isError"] = false
                     result["message"] = Constants.FILE_DOWNLOAD_SUCCESS_MESSAGE
                     result["data"] = fileResult
@@ -1118,19 +1124,11 @@ class AuthClientWrapper(
             result["isError"] = true
             result["errorMessage"] = Constants.DEFAULT_ERROR_MESSAGE
         }
-        
+
         Log.d(TAG, "File download result: ${gson.toJson(result)}")
     }
 
-    private suspend fun encryptRequestBody(requestBody: Map<String, @JvmSuppressWildcards Any>): Map<String, @JvmSuppressWildcards Any> {
-        val encryptedBody = mutableMapOf<String, Any>()
-        requestBody.forEach { (key, value) ->
-            val jsonValue = gson.toJson(value)
-            val encryptedContent = encryptionModule.aesGcmPbkdf2EncryptToBase64(jsonValue, passPhrase)
-            encryptedBody[key] = mapOf("encryptedContent" to encryptedContent)
-        }
-        return encryptedBody
-    }
+    // Note: encryptRequestBody method removed - encryption now handled by EncryptionInterceptor
 
     private fun writeResponseBodyToDisk(
         body: ResponseBody,
@@ -1163,7 +1161,7 @@ class AuthClientWrapper(
             val uri = java.net.URI(url)
             val path = uri.path
             val fileName = File(path).name
-            
+
             if (fileName.isNotEmpty() && fileName.contains(".")) {
                 fileName
             } else {
@@ -1181,7 +1179,7 @@ class AuthClientWrapper(
     private fun getUniqueFileName(directory: File, fileName: String): String {
         var finalFileName = fileName
         var counter = 1
-        
+
         val nameWithoutExtension = if (fileName.contains(".")) {
             fileName.substringBeforeLast(".")
         } else {
@@ -1192,7 +1190,7 @@ class AuthClientWrapper(
         } else {
             ""
         }
-        
+
         while (File(directory, finalFileName).exists()) {
             finalFileName = if (fileExtension.isEmpty()) {
                 "$nameWithoutExtension-$counter"
@@ -1201,7 +1199,7 @@ class AuthClientWrapper(
             }
             counter++
         }
-        
+
         return finalFileName
     }
 
@@ -1210,7 +1208,7 @@ class AuthClientWrapper(
         override fun intercept(chain: Interceptor.Chain): okhttp3.Response {
             val originalRequest = chain.request()
             val builder = originalRequest.newBuilder()
-            
+
             // Add authorization header if token exists
             runBlocking {
                 val accessToken = tokenManager.getAccessToken()
@@ -1218,7 +1216,7 @@ class AuthClientWrapper(
                     builder.header("Authorization", "Bearer $accessToken")
                 }
             }
-            
+
             return chain.proceed(builder.build())
         }
     }
@@ -1255,7 +1253,7 @@ class AuthClientWrapper(
             return synchronized(this) {
                 try {
                     Log.d(TAG, "Starting token refresh")
-                    
+
                     // Use runBlocking since OkHttp Authenticator doesn't support suspend functions
                     val newAccessToken = runBlocking {
                         refreshService.refreshAccessToken()
@@ -1298,16 +1296,16 @@ class AuthClientWrapper(
         private val requestId: String,
         private val progressCallback: (Double) -> Unit
     ) : RequestBody() {
-        
+
         override fun contentType(): MediaType = contentType
-        
+
         override fun contentLength(): Long = file.length()
-        
+
         override fun writeTo(sink: okio.BufferedSink) {
             val fileSize = file.length()
             val buffer = ByteArray(8192)
             var uploaded: Long = 0
-            
+
             file.inputStream().use { inputStream ->
                 var read: Int
                 var lastReportedProgress = -1

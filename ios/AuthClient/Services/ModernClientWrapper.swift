@@ -278,9 +278,12 @@ class ModernClientWrapper: ObservableObject {
         username: String,
         password: String
     ) async throws -> ClientResponse {
-        
+
+        // Clear old tokens before authentication to prevent interference from previous sessions
+        await tokenManager.clearTokens()
+
         var parameters: [String: Any]
-        
+
         // Check if encryption is required
         if Client.getIsEncryptionRequired() {
             guard let encryptedPassword = encryptionModule.aesGcmPbkdf2EncryptToBase64(
@@ -299,25 +302,37 @@ class ModernClientWrapper: ObservableObject {
                 "password": encryptedPassword,
                 "clientId": Client.getClientId()
             ]
-        } else {
+        }
+        else {
             parameters = [
                 "username": username,
                 "password": password
             ]
         }
-        
+
         let config = RequestConfig(
             headers: ["Content-Type": "application/x-www-form-urlencoded", "Accept": "application/json"],
             requiresAuth: false
         )
-        
+
+        #if DEBUG
+        if Client.isLoggingEnabled() {
+            print("🔐 Authentication request - requiresAuth: false")
+            print("🔐 Token cleared - starting fresh authentication")
+            print("🔐 Encryption enabled: \(Client.getIsEncryptionRequired())")
+            if Client.getIsEncryptionRequired() {
+                print("🔐 Password will be encrypted with clientId: \(Client.getClientId().prefix(8))...")
+            }
+        }
+        #endif
+
         let authResponse = try await networkService.post(
             endpoint: endpoint,
             body: parameters,
             responseType: ApiAuthResponse.self,
             config: config
         )
-        
+
         return try await processAuthResponse(authResponse)
     }
     
@@ -326,7 +341,10 @@ class ModernClientWrapper: ObservableObject {
         username: String,
         idToken: String
     ) async throws -> ClientResponse {
-        
+
+        // Clear old tokens before authentication to prevent interference from previous sessions
+        await tokenManager.clearTokens()
+
         let parameters: [String: Any] = [
             "username": username,
             "idToken": idToken,
@@ -350,7 +368,17 @@ class ModernClientWrapper: ObservableObject {
     
     private func processAuthResponse(_ apiAuthResponse: ApiAuthResponse) async throws -> ClientResponse {
         var result: [String: Any] = [:]
-        
+
+        #if DEBUG
+        if Client.isLoggingEnabled() {
+            print("🔐 Processing auth response")
+            print("🔐 Has encrypted content: \(apiAuthResponse.encryptedContent != nil)")
+            print("🔐 Has plain token: \(apiAuthResponse.token != nil)")
+            print("🔐 Error reason: \(apiAuthResponse.errorReason ?? -1)")
+            print("🔐 Error message: \(apiAuthResponse.errorMessage ?? "none")")
+        }
+        #endif
+
         if let encryptedContent = apiAuthResponse.encryptedContent {
             // Handle encrypted response
             guard let decryptedContent = encryptionModule.aesGcmPbkdf2DecryptFromBase64(
@@ -375,7 +403,8 @@ class ModernClientWrapper: ObservableObject {
             result["message"] = "Authorization Granted"
             result["loginStatus"] = AuthClientConstants.AUTH_SUCCESS
             
-        } else {
+        }
+        else {
             // Handle plain response
             guard let accessToken = apiAuthResponse.token,
                   let refreshToken = apiAuthResponse.refreshToken else {
@@ -424,17 +453,53 @@ class ModernClientWrapper: ObservableObject {
         requestBody: [String: Any],
         requestConfig: [String: Any]
     ) async throws -> ClientResponse {
-        
+
         let headers = requestConfig.compactMapValues { $0 as? String }
         let config = RequestConfig(headers: headers)
-        
+
+        // Check if encryption is required
+        let finalBody: [String: Any]
+        if Client.getIsEncryptionRequired() {
+            do {
+                // Serialize request body to JSON string
+                let jsonData = try JSONSerialization.data(withJSONObject: requestBody, options: [])
+                guard let jsonString = String(data: jsonData, encoding: .utf8) else {
+                    throw NetworkError.serverError(400, "Failed to serialize request body")
+                }
+
+                // Encrypt using passPhrase
+                guard let encryptedContent = encryptionModule.aesGcmPbkdf2EncryptToBase64(
+                    data: jsonString,
+                    pass: Client.getPassphrase()
+                ) else {
+                    throw NetworkError.serverError(400, "Failed to encrypt request body")
+                }
+
+                // Wrap in encryptedContent
+                finalBody = ["encryptedContent": encryptedContent]
+
+                #if DEBUG
+                if Client.isLoggingEnabled() {
+                    print("🔒 POST Request Encryption Enabled")
+                    print("🔒 Original body size: \(jsonString.count) chars")
+                    print("🔒 Encrypted body size: \(encryptedContent.count) chars")
+                }
+                #endif
+
+            } catch {
+                throw NetworkError.serverError(400, "Encryption failed: \(error.localizedDescription)")
+            }
+        } else {
+            finalBody = requestBody
+        }
+
         let data = try await networkService.requestData(
             endpoint: endpoint,
             method: "POST",
-            body: requestBody,
+            body: finalBody,
             config: config
         )
-        
+
         return try processDataResponse(data)
     }
     
@@ -599,8 +664,50 @@ class ModernClientWrapper: ObservableObject {
         requestConfig: [String: Any],
         destinationPath: String
     ) async throws -> ClientResponse {
-        
+
         let headers = requestConfig.compactMapValues { $0 as? String }
+
+        // Check for special download header - skip encryption/decryption for binary downloads
+        if headers["option"] == AuthClientConstants.DOWNLOAD {
+            #if DEBUG
+            if Client.isLoggingEnabled() {
+                print("📥 File download with option=DOWNLOAD - skipping decryption")
+            }
+            #endif
+
+            let config = RequestConfig(headers: headers)
+            let data = try await networkService.requestData(
+                endpoint: endpoint,
+                method: "GET",
+                config: config
+            )
+
+            // Write directly to file without decryption
+            let documentsDirectory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+            let targetDirectory = documentsDirectory.appendingPathComponent("downloads")
+
+            if !FileManager.default.fileExists(atPath: targetDirectory.path) {
+                try FileManager.default.createDirectory(at: targetDirectory, withIntermediateDirectories: true, attributes: nil)
+            }
+
+            let fileName = URL(string: endpoint)?.lastPathComponent ?? "downloaded-file-\(Int(Date().timeIntervalSince1970)).bin"
+            let finalDestinationURL = targetDirectory.appendingPathComponent(fileName)
+
+            try data.write(to: finalDestinationURL)
+
+            var result: [String: Any] = [:]
+            result["message"] = "File downloaded successfully"
+            result["filePath"] = finalDestinationURL.path
+            result["fileSize"] = data.count
+
+            return ClientResponse(
+                data: result,
+                httpStatusCode: 200,
+                isError: false,
+                errorMessage: nil
+            )
+        }
+
         let config = RequestConfig(headers: headers)
         
         // Get the Documents directory (ignore incoming destinationPath)
@@ -767,8 +874,51 @@ class ModernClientWrapper: ObservableObject {
         requestBody: [String: Any],
         requestConfig: [String: Any]
     ) async throws -> ClientResponse {
-        
+
         let headers = requestConfig.compactMapValues { $0 as? String }
+
+        // Check for special download header - skip encryption/decryption for binary downloads
+        if headers["option"] == AuthClientConstants.DOWNLOAD {
+            #if DEBUG
+            if Client.isLoggingEnabled() {
+                print("📥 POST file download with option=DOWNLOAD - skipping encryption/decryption")
+            }
+            #endif
+
+            let config = RequestConfig(headers: headers)
+            let data = try await networkService.requestData(
+                endpoint: endpoint,
+                method: "POST",
+                body: requestBody,
+                config: config
+            )
+
+            // Write directly to temp directory without decryption
+            let tempDirectory = FileManager.default.temporaryDirectory
+            let targetDirectory = tempDirectory.appendingPathComponent("downloads")
+
+            if !FileManager.default.fileExists(atPath: targetDirectory.path) {
+                try FileManager.default.createDirectory(at: targetDirectory, withIntermediateDirectories: true, attributes: nil)
+            }
+
+            let fileName = URL(string: endpoint)?.lastPathComponent ?? "downloaded-file-\(Int(Date().timeIntervalSince1970)).png"
+            let finalDestinationURL = targetDirectory.appendingPathComponent(fileName)
+
+            try data.write(to: finalDestinationURL)
+
+            var result: [String: Any] = [:]
+            result["message"] = "File downloaded successfully"
+            result["filePath"] = finalDestinationURL.path
+            result["fileSize"] = data.count
+
+            return ClientResponse(
+                data: result,
+                httpStatusCode: 200,
+                isError: false,
+                errorMessage: nil
+            )
+        }
+
         let config = RequestConfig(headers: headers)
         
         let data = try await networkService.requestData(
@@ -981,72 +1131,156 @@ class ModernClientWrapper: ObservableObject {
     }
     
     private func processDataResponse(_ data: Data) throws -> ClientResponse {
-        guard let jsonObject = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            // If not JSON, return raw data as string
-            let stringData = String(data: data, encoding: .utf8) ?? "Unable to decode response"
-            return ClientResponse(
-                data: [
-                    "data": stringData,
-                    "message": "Request successful"
-                ],
-                httpStatusCode: 200,
-                isError: false,
-                errorMessage: nil
-            )
-        }
-        
-        var result: [String: Any] = [:]
-        result["message"] = "Request successful"
-        
-        if let encryptedContent = jsonObject["encryptedContent"] as? String {
-            // Handle encrypted response
-            guard let decryptedContent = encryptionModule.aesGcmPbkdf2DecryptFromBase64(
-                data: encryptedContent,
-                pass: Client.getPassphrase()
-            ),
-            let jsonData = decryptedContent.data(using: .utf8),
-            let decryptedObject = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any] else {
-                
+
+        // Try to parse as JSON if encryption is required
+        if Client.getIsEncryptionRequired() {
+            do {
+                guard let jsonObject = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+                    // Not JSON - likely binary file data, return as-is
+                    #if DEBUG
+                    if Client.isLoggingEnabled() {
+                        print("🔓 Response is not JSON - treating as binary data")
+                    }
+                    #endif
+
+                    let stringData = String(data: data, encoding: .utf8) ?? "Binary data"
+                    return ClientResponse(
+                        data: ["data": stringData, "message": "Request successful"],
+                        httpStatusCode: 200,
+                        isError: false,
+                        errorMessage: nil
+                    )
+                }
+
+                var result: [String: Any] = [:]
+                result["message"] = "Request successful"
+
+                // Check for encrypted content
+                if let encryptedContent = jsonObject["encryptedContent"] as? String {
+                    // Decrypt using passPhrase
+                    guard let decryptedContent = encryptionModule.aesGcmPbkdf2DecryptFromBase64(
+                        data: encryptedContent,
+                        pass: Client.getPassphrase()
+                    ),
+                    let jsonData = decryptedContent.data(using: .utf8),
+                    let decryptedObject = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any] else {
+
+                        // Encryption required but decryption failed
+                        #if DEBUG
+                        if Client.isLoggingEnabled() {
+                            print("⚠️ DECRYPTION ERROR - encryptedContent found but decryption failed")
+                            print("⚠️ Check if passPhrase is correct or if encryption algorithm matches")
+                        }
+                        #endif
+
+                        // Return error response instead of crashing
+                        return ClientResponse(
+                            data: [
+                                "error": true,
+                                "errorMessage": "Decryption Error: Failed to decrypt response",
+                                "errorReason": "DECRYPTION_FAILED",
+                                "message": "Response has encryptedContent but decryption failed",
+                                "hint": "Check if passPhrase is correct or if server uses same encryption algorithm"
+                            ],
+                            httpStatusCode: 400,
+                            isError: true,
+                            errorMessage: "Decryption Error: Failed to decrypt response"
+                        )
+                    }
+
+                    #if DEBUG
+                    if Client.isLoggingEnabled() {
+                        print("🔓 Response Decryption Successful")
+                        print("🔓 Encrypted content size: \(encryptedContent.count) chars")
+                    }
+                    #endif
+
+                    // Merge decrypted data
+                    for (key, value) in decryptedObject {
+                        result[key] = value
+                    }
+
+                } else {
+                    // No encrypted content - strict check required
+                    #if DEBUG
+                    if Client.isLoggingEnabled() {
+                        print("⚠️ ENCRYPTION ERROR - Expected encrypted response but got plain response")
+                        print("⚠️ Server must return {\"encryptedContent\": \"...\"} when encryption is enabled")
+                    }
+                    #endif
+
+                    // Return error response instead of crashing
+                    return ClientResponse(
+                        data: [
+                            "error": true,
+                            "errorMessage": "Encryption Error: Server returned plain response",
+                            "errorReason": "ENCRYPTION_REQUIRED_BUT_MISSING",
+                            "message": "Server must return encrypted response when isEncryptionRequired=true",
+                            "hint": "Check if server supports encryption or disable isEncryptionRequired"
+                        ],
+                        httpStatusCode: 400,
+                        isError: true,
+                        errorMessage: "Encryption Error: Server returned plain response"
+                    )
+                }
+
                 return ClientResponse(
-                    data: ["message": "Decryption failed"],
+                    data: result,
                     httpStatusCode: 200,
-                    isError: true,
-                    errorMessage: "Failed to decrypt response"
+                    isError: false,
+                    errorMessage: nil
+                )
+
+            } catch {
+                // If JSON parsing fails, likely binary data
+                #if DEBUG
+                if Client.isLoggingEnabled() {
+                    print("🔓 JSON parsing failed - treating as binary: \(error)")
+                }
+                #endif
+
+                let stringData = String(data: data, encoding: .utf8) ?? "Binary data"
+                return ClientResponse(
+                    data: ["data": stringData, "message": "Request successful"],
+                    httpStatusCode: 200,
+                    isError: false,
+                    errorMessage: nil
                 )
             }
-            
-            // Merge decrypted data with result
-            for (key, value) in decryptedObject {
-                result[key] = value
-            }
-            
         } else {
-            // Handle plain response - match Android structure
-            if let message = jsonObject["message"] as? String {
-                result["message"] = message
+            // Encryption not required - parse as plain JSON
+            guard let jsonObject = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+                let stringData = String(data: data, encoding: .utf8) ?? "Unable to decode response"
+                return ClientResponse(
+                    data: ["data": stringData, "message": "Request successful"],
+                    httpStatusCode: 200,
+                    isError: false,
+                    errorMessage: nil
+                )
             }
-            
-            // Handle encrypted/non-encrypted response data
+
+            var result: [String: Any] = [:]
+            result["message"] = jsonObject["message"] as? String ?? "Request successful"
+
             if let apiResponse = jsonObject["apiResponse"] {
                 result["data"] = apiResponse
             } else if let data = jsonObject["data"] {
                 result["data"] = data
             } else {
-                // Include all fields if no specific data structure
                 for (key, value) in jsonObject {
                     if key != "message" {
                         result[key] = value
                     }
                 }
             }
+
+            return ClientResponse(
+                data: result,
+                httpStatusCode: 200,
+                isError: false,
+                errorMessage: nil
+            )
         }
-        
-        return ClientResponse(
-            data: result,
-            httpStatusCode: 200,
-            isError: false,
-            errorMessage: nil
-        )
     }
     
     // MARK: - Response Handling
@@ -1095,6 +1329,8 @@ class ModernClientWrapper: ObservableObject {
                 } else {
                     result["loginStatus"] = AuthClientConstants.AUTH_FAILED
                 }
+                            case .tokenRefreshFailed:
+                result["httpStatusCode"] = 401
             case .unauthorized:
                 result["httpStatusCode"] = 401
                 result["message"] = "Unauthorized"

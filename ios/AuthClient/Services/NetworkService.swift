@@ -73,7 +73,12 @@ public class NetworkService: ObservableObject {
         configuration.timeoutIntervalForRequest = Client.getDefaultTimeout()
         configuration.timeoutIntervalForResource = Client.getDefaultTimeout() * 2
         configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
-        
+
+        // Disable credential storage to prevent interference from previous sessions
+        configuration.urlCredentialStorage = nil
+        configuration.httpShouldSetCookies = false
+        configuration.httpCookieStorage = nil
+
         self.session = URLSession(configuration: configuration)
         self.tokenManager = TokenManager.shared
         
@@ -139,13 +144,24 @@ public class NetworkService: ObservableObject {
                 request.httpBody = try JSONSerialization.data(withJSONObject: body)
             }
         }
-        
+
         // Add auth token if required
         if config.requiresAuth {
             let token = try await getValidAccessToken()
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+            #if DEBUG
+            if Client.isLoggingEnabled() {
+                print("🔑 POST request with auth token")
+            }
+            #endif
+        } else {
+            #if DEBUG
+            if Client.isLoggingEnabled() {
+                print("🔓 POST request WITHOUT auth (requiresAuth: false)")
+            }
+            #endif
         }
-        
+
         return try await performRequest(request: request, responseType: responseType)
     }
     
@@ -280,11 +296,20 @@ public class NetworkService: ObservableObject {
     private func performDataRequest(request: URLRequest) async throws -> Data {
         do {
             let (data, response) = try await session.data(for: request)
-            
+
             guard let httpResponse = response as? HTTPURLResponse else {
                 throw NetworkError.unknown(URLError(.badServerResponse))
             }
-            
+
+            #if DEBUG
+            if Client.isLoggingEnabled() {
+                print("📡 HTTP Response Status: \(httpResponse.statusCode)")
+                if let responseString = String(data: data, encoding: .utf8) {
+                    print("📡 Response body preview: \(responseString.prefix(200))...")
+                }
+            }
+            #endif
+
             // Handle authentication errors
             if httpResponse.statusCode == 401 {
                 // Try to refresh token and retry once
@@ -405,13 +430,18 @@ public class NetworkService: ObservableObject {
     
     private func createFormData(from parameters: [String: Any]) -> Data {
         var components: [String] = []
-        
+
+        // Create custom character set for form URL encoding
+        // This matches Android's URLEncoder.encode() behavior
+        var allowedCharacters = CharacterSet.alphanumerics
+        allowedCharacters.insert(charactersIn: "-_.~") // RFC 3986 unreserved characters
+
         for (key, value) in parameters {
-            let escapedKey = key.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? key
-            let escapedValue = "\(value)".addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "\(value)"
+            let escapedKey = key.addingPercentEncoding(withAllowedCharacters: allowedCharacters) ?? key
+            let escapedValue = "\(value)".addingPercentEncoding(withAllowedCharacters: allowedCharacters) ?? "\(value)"
             components.append("\(escapedKey)=\(escapedValue)")
         }
-        
+
         return components.joined(separator: "&").data(using: .utf8) ?? Data()
     }
     
