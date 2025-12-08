@@ -9,6 +9,7 @@ import com.reactnativeauthclient.crypto.PBKDF2EncryptionModule
 import com.reactnativeauthclient.interceptors.EncryptionInterceptor
 import com.reactnativeauthclient.models.ApiAuthResponse
 import com.reactnativeauthclient.models.ApiClientResult
+import com.reactnativeauthclient.models.ApiErrorResponse
 import com.reactnativeauthclient.utils.Constants
 import kotlinx.coroutines.*
 import okhttp3.*
@@ -740,20 +741,33 @@ class AuthClientWrapper(
             result["loginStatus"] = body.errorReason
             result["isError"] = false
             result["message"] = "Authorization Granted"
-        } else {
+        }
+        else {
             result["isError"] = true
             try {
                 if (response.errorBody() != null) {
-                    val errorResponse = gson.fromJson(response.errorBody()!!.charStream(), ApiAuthResponse::class.java)
-                    result["message"] = errorResponse.errorMessage ?: "Authentication failed"
-                    result["errorMessage"] = errorResponse.errorMessage ?: Constants.DEFAULT_ERROR_MESSAGE
-                    result["loginStatus"] = errorResponse.errorReason
+                    val errorBodyString = response.errorBody()!!.string()
+
+                    try {
+                        val errorResponse = gson.fromJson(errorBodyString, ApiErrorResponse::class.java)
+                        result["message"] = errorResponse.errorMessage ?: "Authentication failed"
+                        result["errorMessage"] = errorResponse.errorMessage ?: Constants.DEFAULT_ERROR_MESSAGE
+                        result["loginStatus"] = errorResponse.errorReason
+                    } catch (e: JsonSyntaxException) {
+                        // Error body is not valid JSON or doesn't match ApiErrorResponse structure
+                        Log.e(TAG, "Failed to parse error response as JSON: ${e.message}")
+                        Log.e(TAG, "Raw error body: $errorBodyString")
+                        result["message"] = "Authentication failed"
+                        result["errorMessage"] = errorBodyString.ifEmpty { Constants.DEFAULT_ERROR_MESSAGE }
+                        result["loginStatus"] = ApiAuthResponse.AUTH_FAILED
+                    }
                 } else {
                     result["message"] = "Authentication failed"
                     result["errorMessage"] = Constants.DEFAULT_ERROR_MESSAGE
                     result["loginStatus"] = ApiAuthResponse.AUTH_FAILED
                 }
-            } catch (e: JsonSyntaxException) {
+            } catch (e: Exception) {
+                Log.e(TAG, "Error processing authentication response", e)
                 result["message"] = "Authentication failed"
                 result["errorMessage"] = Constants.DEFAULT_ERROR_MESSAGE
                 result["loginStatus"] = ApiAuthResponse.AUTH_FAILED
@@ -786,16 +800,28 @@ class AuthClientWrapper(
             result["isError"] = true
             try {
                 if (response.errorBody() != null) {
-                    val errorResponse = gson.fromJson(response.errorBody()!!.charStream(), ApiAuthResponse::class.java)
-                    result["message"] = errorResponse.errorMessage ?: "Authentication failed"
-                    result["errorMessage"] = errorResponse.errorMessage ?: Constants.DEFAULT_ERROR_MESSAGE
-                    result["loginStatus"] = errorResponse.errorReason
+                    val errorBodyString = response.errorBody()!!.string()
+
+                    try {
+                        val errorResponse = gson.fromJson(errorBodyString, ApiErrorResponse::class.java)
+                        result["message"] = errorResponse.errorMessage ?: "Authentication failed"
+                        result["errorMessage"] = errorResponse.errorMessage ?: Constants.DEFAULT_ERROR_MESSAGE
+                        result["loginStatus"] = errorResponse.errorReason
+                    } catch (e: JsonSyntaxException) {
+                        // Error body is not valid JSON or doesn't match ApiErrorResponse structure
+                        Log.e(TAG, "Failed to parse error response as JSON: ${e.message}")
+                        Log.e(TAG, "Raw error body: $errorBodyString")
+                        result["message"] = "Authentication failed"
+                        result["errorMessage"] = errorBodyString.ifEmpty { Constants.DEFAULT_ERROR_MESSAGE }
+                        result["loginStatus"] = ApiAuthResponse.AUTH_FAILED
+                    }
                 } else {
                     result["message"] = "Authentication failed"
                     result["errorMessage"] = Constants.DEFAULT_ERROR_MESSAGE
                     result["loginStatus"] = ApiAuthResponse.AUTH_FAILED
                 }
-            } catch (e: JsonSyntaxException) {
+            } catch (e: Exception) {
+                Log.e(TAG, "Error processing authentication response", e)
                 result["message"] = "Authentication failed"
                 result["errorMessage"] = Constants.DEFAULT_ERROR_MESSAGE
                 result["loginStatus"] = ApiAuthResponse.AUTH_FAILED
@@ -843,21 +869,92 @@ class AuthClientWrapper(
 
         if (response.isSuccessful && response.body() != null) {
             val body = response.body()!!
-            result["isError"] = false
-            result["message"] = body.message ?: "Request successful"
 
-            // Handle encrypted/non-encrypted response data
+            // Check business logic status: success=false means error even with HTTP 200
+            val isBusinessError = body.success == false
+
+            if (isBusinessError) {
+                // Business logic error (e.g., "success": false with HTTP 200)
+                result["isError"] = true
+                result["message"] = body.message ?: "Request failed"
+                result["errorMessage"] = body.errorMessage ?: body.message ?: Constants.DEFAULT_ERROR_MESSAGE
+
+                // Include errorCode if present
+                body.errorCode?.let { result["errorCode"] = it }
+
+                // Include errorReason if present
+                if (body.errorReason != 0) {
+                    result["errorReason"] = body.errorReason
+                }
+
+                Log.w(TAG, "Business error: ${body.message} (errorCode: ${body.errorCode})")
+            } else {
+                // Normal success
+                result["isError"] = false
+                result["message"] = body.message ?: "Request successful"
+            }
+
+            // Always include data if available
             val apiResponse = body.apiResponse
             val data = body.data
             when {
                 apiResponse != null -> result["data"] = apiResponse
                 data != null -> result["data"] = data
             }
-        } else {
+        }
+        else {
+            // HTTP error (4xx, 5xx) - parse error body for actual error details
             result["isError"] = true
-            when (response.code()) {
-                500 -> result["errorMessage"] = "Internal server error"
-                else -> result["errorMessage"] = Constants.DEFAULT_ERROR_MESSAGE
+
+            try {
+                if (response.errorBody() != null) {
+                    val errorBodyString = response.errorBody()!!.string()
+
+                    try {
+                        // Try to parse error body as ApiClientResult
+                        val errorResponse = gson.fromJson(errorBodyString, ApiClientResult::class.java)
+
+                        result["message"] = errorResponse.message ?: "Request failed"
+                        result["errorMessage"] = errorResponse.errorMessage
+                            ?: errorResponse.message
+                            ?: when (response.code()) {
+                                500 -> "Internal server error"
+                                else -> Constants.DEFAULT_ERROR_MESSAGE
+                            }
+
+                        // Include errorCode if present
+                        errorResponse.errorCode?.let { result["errorCode"] = it }
+
+                        // Include errorReason if present
+                        if (errorResponse.errorReason != 0) {
+                            result["errorReason"] = errorResponse.errorReason
+                        }
+
+                        Log.e(TAG, "HTTP ${response.code()} error: ${errorResponse.message} (errorCode: ${errorResponse.errorCode})")
+
+                    } catch (e: Exception) {
+                        // JSON parsing failed, use raw error body
+                        Log.e(TAG, "Failed to parse error body: ${e.message}")
+                        result["errorMessage"] = errorBodyString.ifEmpty {
+                            when (response.code()) {
+                                500 -> "Internal server error"
+                                else -> Constants.DEFAULT_ERROR_MESSAGE
+                            }
+                        }
+                    }
+                } else {
+                    // No error body
+                    result["errorMessage"] = when (response.code()) {
+                        500 -> "Internal server error"
+                        else -> Constants.DEFAULT_ERROR_MESSAGE
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error processing HTTP error response", e)
+                result["errorMessage"] = when (response.code()) {
+                    500 -> "Internal server error"
+                    else -> Constants.DEFAULT_ERROR_MESSAGE
+                }
             }
         }
 

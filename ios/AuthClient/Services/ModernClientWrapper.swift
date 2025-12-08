@@ -1379,7 +1379,15 @@ class ModernClientWrapper: ObservableObject {
             switch networkError {
             case .serverError(let code, let message):
                 result["httpStatusCode"] = code
-                result["message"] = message ?? "Request failed"
+
+                // Extract error message
+                if let message = message {
+                    result["message"] = message
+                    result["errorMessage"] = message
+                } else {
+                    result["message"] = "Request failed"
+                }
+
             case .unauthorized:
                 result["httpStatusCode"] = 401
                 result["message"] = "Unauthorized"

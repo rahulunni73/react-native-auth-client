@@ -33,7 +33,10 @@ export interface HttpResponse<T = any> {
   data: T;
   isError: boolean;
   errorMessage?: string;
+  errorCode?: string;
+  errorReason?: number;
   httpStatusCode?: number;
+  message?: string;
 }
 
 export interface FileResponse {
@@ -41,6 +44,10 @@ export interface FileResponse {
   filePath?: string;
   fileSize?: number;
   data?: string; // Base64 for downloadFileInBase64
+  isError?: boolean;
+  errorMessage?: string;
+  errorCode?: string;
+  httpStatusCode?: number;
 }
 
 // Event types for progress tracking

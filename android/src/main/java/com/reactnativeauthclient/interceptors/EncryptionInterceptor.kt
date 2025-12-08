@@ -148,7 +148,8 @@ class EncryptionInterceptor(
             // Decrypt response using passPhrase
             return decryptResponse(response, getPassPhrase(), true)
 
-        } catch (e: Exception) {
+        }
+        catch (e: Exception) {
             println("$TAG: Authentication encryption error: ${e.message}")
             throw e
         }
@@ -337,14 +338,21 @@ class EncryptionInterceptor(
 
                 // Check for bad token error
                 if (encResponse.errorReason == Constants.BAD_TOKEN ||
-                    encResponse.errorMessage == Constants.BAD_TOKEN_TEXT) {
-                    // Return 401 response
+                    encResponse.errorMessage == Constants.BAD_TOKEN_TEXT  || encResponse.errorMessage == "Authentication Failed" ) {
+                    // Return 401 response with proper JSON structure
+                    val badTokenResponse = mapOf(
+                        "error" to true,
+                        "errorMessage" to (encResponse.errorMessage ?: "Unauthorized"),
+                        "errorReason" to encResponse.errorReason
+                    )
+                    val badTokenJson = gson.toJson(badTokenResponse)
+
                     return Response.Builder()
                         .request(modifiedResponse.request)
                         .protocol(modifiedResponse.protocol)
-                        .code(401)
-                        .message("Unauthorized")
-                        .body("Unauthorized".toResponseBody(responseBody.contentType()))
+                        .code(response.code)
+                        .message((encResponse.errorMessage).toString())
+                        .body(badTokenJson.toResponseBody(responseBody.contentType()))
                         .build()
                 }
 
@@ -355,9 +363,9 @@ class EncryptionInterceptor(
 
                 val errorResponse = mapOf(
                     "error" to true,
-                    "errorMessage" to "Encryption Error: Server returned plain response",
-                    "errorReason" to "ENCRYPTION_REQUIRED_BUT_MISSING",
-                    "message" to "Server must return encrypted response when isEncryptionRequired=true",
+                    "errorMessage" to  encResponse.errorMessage,
+                    "errorReason" to encResponse.errorReason,
+                    "message" to "ENCRYPTION_REQUIRED_BUT_MISSING, Encryption Error: Server returned plain response",
                     "hint" to "Check if server supports encryption or disable isEncryptionRequired"
                 )
 

@@ -447,16 +447,51 @@ public class NetworkService: ObservableObject {
     
     private func extractErrorMessage(from data: Data?) -> String? {
         guard let data = data else { return nil }
-        
+
         do {
             if let json = try JSONSerialization.jsonObject(with: data) as? [String: Any] {
-                return json["message"] as? String ?? json["error"] as? String
+
+                // Check if response is encrypted
+                if let encryptedContent = json["encryptedContent"] as? String,
+                   Client.getIsEncryptionRequired() {
+
+                    // Decrypt the error response
+                    let encryptionModule = PBKDF2EncryptionModule()
+                    guard let decryptedContent = encryptionModule.aesGcmPbkdf2DecryptFromBase64(
+                        data: encryptedContent,
+                        pass: Client.getPassphrase()
+                    ),
+                    let decryptedData = decryptedContent.data(using: .utf8),
+                    let decryptedJson = try? JSONSerialization.jsonObject(with: decryptedData) as? [String: Any] else {
+
+                        #if DEBUG
+                        if Client.isLoggingEnabled() {
+                            print("⚠️ Failed to decrypt error response")
+                        }
+                        #endif
+
+                        return "Failed to decrypt error response"
+                    }
+
+                    // Extract error message from decrypted content
+                    // Priority: errorMessage > message > error
+                    return decryptedJson["errorMessage"] as? String
+                        ?? decryptedJson["message"] as? String
+                        ?? decryptedJson["error"] as? String
+                }
+
+                // Plain JSON response (not encrypted)
+                // Priority: errorMessage > message > error > success
+                return json["errorMessage"] as? String
+                    ?? json["message"] as? String
+                    ?? json["error"] as? String
             }
         } catch {
             // If JSON parsing fails, try to get string representation
+            // This handles cases where server returns plain text error messages
             return String(data: data, encoding: .utf8)
         }
-        
+
         return nil
     }
     
