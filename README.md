@@ -525,6 +525,159 @@ EncryptionInterceptor: Response Decryption Successful
 - **PBKDF2 Encryption**: Optional request/response encryption
 - **Secure Logout**: Transmits current tokens to server for invalidation
 
+## Error Handling
+
+The library provides comprehensive error handling with full cross-platform consistency (v0.2.9+).
+
+### Error Response Structure
+
+All API calls return a consistent error response format across iOS and Android:
+
+```typescript
+interface ErrorResponse {
+  isError: boolean;           // true when error occurs
+  errorMessage: string;       // Detailed error message from server
+  errorCode?: string;         // Business error code (e.g., "P1000", "AUTH_FAILED")
+  errorReason?: number;       // Numeric error reason code
+  httpStatusCode: number;     // HTTP status code (200, 401, 500, etc.)
+  message: string;            // Human-readable status message
+  data?: any;                 // Partial data (if available even with error)
+}
+```
+
+### Error Handling Examples
+
+#### Handling Authentication Errors
+
+```typescript
+try {
+  const result = await AuthClient.authenticate('/api/login', credentials);
+
+  if (result.isError) {
+    console.error('Login failed:', result.errorMessage);
+    console.error('Error code:', result.errorCode);
+    console.error('HTTP status:', result.httpStatusCode);
+  } else {
+    console.log('Login successful!');
+  }
+} catch (error) {
+  console.error('Request failed:', error);
+}
+```
+
+#### Handling HTTP Errors
+
+```typescript
+const response = await AuthClient.post('api/users', userData);
+
+if (response.isError) {
+  // Check specific error codes
+  if (response.errorCode === 'P1000') {
+    console.log('Duplicate name error');
+  } else if (response.httpStatusCode === 500) {
+    console.log('Server error:', response.errorMessage);
+  } else if (response.httpStatusCode === 401) {
+    console.log('Unauthorized - session expired');
+  }
+}
+```
+
+#### Handling Business Logic Errors
+
+The library detects business logic errors (HTTP 200 with `success: false`):
+
+```typescript
+// Server returns: HTTP 200 { "success": false, "errorCode": "P1000", "message": "Name already exists" }
+
+const response = await AuthClient.post('api/create-folder', { name: 'Documents' });
+
+if (response.isError) {
+  // Even though HTTP status is 200, isError will be true
+  console.log('Operation failed:', response.errorMessage);  // "Name already exists"
+  console.log('Error code:', response.errorCode);          // "P1000"
+}
+```
+
+### Error Types
+
+| Error Type | HTTP Status | Response Body | isError | Description |
+|------------|-------------|---------------|---------|-------------|
+| **Success** | 200-299 | `{"success": true, "data": {...}}` | `false` | Normal successful response |
+| **Business Error** | 200 | `{"success": false, "errorCode": "P1000"}` | `true` | Server-side validation/logic error |
+| **Authentication Error** | 401 | `{"errorMessage": "Invalid credentials"}` | `true` | Authentication failed |
+| **Server Error** | 500 | `{"message": "Internal error"}` | `true` | Server-side error |
+| **Network Error** | N/A | Exception thrown | Exception | Network connectivity issue |
+
+### Encrypted Error Responses (iOS)
+
+When encryption is enabled, error responses are automatically decrypted:
+
+```typescript
+// Server returns HTTP 500 with encrypted error:
+// { "encryptedContent": "base64_encrypted_error_message" }
+
+const response = await AuthClient.get('api/data');
+
+if (response.isError) {
+  // Error message is automatically decrypted
+  console.log(response.errorMessage);  // Shows actual decrypted error message
+}
+```
+
+### Platform-Specific Error Handling
+
+#### Android
+- Parses error body from `response.errorBody()` for HTTP errors
+- Handles `JsonSyntaxException` gracefully with fallback to raw error text
+- Decrypts encrypted error responses via `EncryptionInterceptor`
+
+#### iOS
+- Extracts error messages from HTTP response data
+- Automatically decrypts encrypted error responses using `PBKDF2EncryptionModule`
+- Falls back to plain text error messages when JSON parsing fails
+
+### Best Practices
+
+1. **Always check `isError` flag**:
+```typescript
+const response = await AuthClient.post('api/endpoint', data);
+if (response.isError) {
+  // Handle error
+} else {
+  // Process data
+}
+```
+
+2. **Use error codes for business logic**:
+```typescript
+if (response.errorCode === 'P1000') {
+  showAlert('Name already exists. Please choose a different name.');
+} else if (response.errorCode === 'AUTH_FAILED') {
+  navigateToLogin();
+}
+```
+
+3. **Check HTTP status for network errors**:
+```typescript
+if (response.httpStatusCode === 401) {
+  // Session expired - redirect to login
+} else if (response.httpStatusCode >= 500) {
+  // Server error - show retry option
+}
+```
+
+4. **Log detailed errors for debugging**:
+```typescript
+if (response.isError) {
+  console.log('Error Details:', {
+    message: response.errorMessage,
+    code: response.errorCode,
+    reason: response.errorReason,
+    httpStatus: response.httpStatusCode,
+  });
+}
+```
+
 ## Example App
 
 The library includes a comprehensive example app demonstrating all features. To run it:
@@ -552,6 +705,31 @@ npx react-native run-android
 MIT
 
 ## Changelog
+
+### v0.2.9
+- **🚀 Enhanced Error Handling with Full Cross-Platform Consistency**
+  - **Fixed JsonSyntaxException crashes** in Android authentication error parsing
+  - **HTTP 500 error responses** now extract actual server error messages instead of generic messages
+  - **Business logic error detection**: Properly handles HTTP 200 responses with `success: false`
+  - **Encrypted error response support (iOS)**: Automatically decrypts encrypted error messages
+  - **Enhanced error details**: All responses now include `errorCode`, `errorReason`, and detailed `errorMessage`
+  - **TypeScript interface updates**: Added error fields to `HttpResponse` and `FileResponse` types
+  - **Graceful fallback handling**: Handles JSON, plain text, and encrypted error formats seamlessly
+  - **Comprehensive error logging**: Better debugging with detailed error information
+  - **100% cross-platform error format consistency** between iOS and Android
+
+**Error Response Format:**
+```typescript
+{
+  isError: boolean,           // Error flag
+  errorMessage: string,       // Detailed error message from server
+  errorCode?: string,         // Business error code (e.g., "P1000")
+  errorReason?: number,       // Numeric error reason (e.g., 401)
+  httpStatusCode: number,     // HTTP status code
+  message: string,            // Status message
+  data?: any                  // Response data (if available)
+}
+```
 
 ### v0.2.8
 - **Complete PBKDF2 encryption implementation** with cross-platform consistency
