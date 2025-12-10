@@ -14,12 +14,12 @@ public enum NetworkError: Error, LocalizedError {
     case noData
     case decodingError(Error)
     case serverError(Int, String?)
-    case tokenRefreshFailed
+    case tokenRefreshFailed(statusCode: Int?, message: String?)
     case unauthorized
     case networkUnavailable
     case requestTimeout
     case unknown(Error)
-    
+
     public var errorDescription: String? {
         switch self {
         case .invalidURL:
@@ -30,8 +30,11 @@ public enum NetworkError: Error, LocalizedError {
             return "Failed to decode response: \(error.localizedDescription)"
         case .serverError(let code, let message):
             return message ?? "Server error (\(code))"
-        case .tokenRefreshFailed:
-            return "Failed to refresh authentication token"
+        case .tokenRefreshFailed(let statusCode, let message):
+            if let code = statusCode {
+                return message ?? "Failed to refresh authentication token (HTTP \(code))"
+            }
+            return message ?? "Failed to refresh authentication token"
         case .unauthorized:
             return "Unauthorized access"
         case .networkUnavailable:
@@ -40,6 +43,19 @@ public enum NetworkError: Error, LocalizedError {
             return "Request timed out"
         case .unknown(let error):
             return "Network error: \(error.localizedDescription)"
+        }
+    }
+
+    public var statusCode: Int? {
+        switch self {
+        case .serverError(let code, _):
+            return code
+        case .tokenRefreshFailed(let statusCode, _):
+            return statusCode
+        case .unauthorized:
+            return 401
+        default:
+            return nil
         }
     }
 }
@@ -312,10 +328,26 @@ public class NetworkService: ObservableObject {
 
             // Handle authentication errors
             if httpResponse.statusCode == 401 {
+                #if DEBUG
+                if Client.isLoggingEnabled() {
+                    print("⚠️ Received 401 Unauthorized")
+                }
+                #endif
+
                 // Try to refresh token and retry once
                 if request.value(forHTTPHeaderField: "Authorization")?.isEmpty == false {
+                    #if DEBUG
+                    if Client.isLoggingEnabled() {
+                        print("🔄 Request had auth token, attempting refresh and retry...")
+                    }
+                    #endif
                     return try await handleUnauthorizedAndRetry(originalRequest: request)
                 } else {
+                    #if DEBUG
+                    if Client.isLoggingEnabled() {
+                        print("❌ No auth token in request, cannot retry")
+                    }
+                    #endif
                     throw NetworkError.unauthorized
                 }
             }
@@ -364,56 +396,217 @@ public class NetworkService: ObservableObject {
     private func getValidAccessToken() async throws -> String {
         let accessToken = await tokenManager.getAccessToken()
         let isTokenExpired = await tokenManager.isTokenExpired()
-        
+
+        #if DEBUG
+        if Client.isLoggingEnabled() {
+            print("🔍 Checking token validity...")
+            print("   - Has access token: \(!accessToken.isEmpty)")
+            print("   - Is expired: \(isTokenExpired)")
+        }
+        #endif
+
         if accessToken.isEmpty || isTokenExpired {
+            #if DEBUG
+            if Client.isLoggingEnabled() {
+                print("🔄 Token invalid or expired, refreshing...")
+            }
+            #endif
             return try await refreshAccessToken()
         }
-        
+
+        #if DEBUG
+        if Client.isLoggingEnabled() {
+            print("✅ Token is valid, using existing token")
+        }
+        #endif
+
         return accessToken
     }
     
     private func refreshAccessToken() async throws -> String {
         // Use existing refresh task if available
         if let existingRefreshTask = refreshTask {
+            #if DEBUG
+            if Client.isLoggingEnabled() {
+                print("🔄 Using existing refresh task")
+            }
+            #endif
             return try await existingRefreshTask.value
         }
-        
+
+        #if DEBUG
+        if Client.isLoggingEnabled() {
+            print("🔄 Starting new token refresh...")
+        }
+        #endif
+
         // Create new refresh task
         let task = Task<String, Error> {
             defer { refreshTask = nil }
-            
+
             let refreshToken = await tokenManager.getRefreshToken()
-            guard !refreshToken.isEmpty else {
-                throw NetworkError.tokenRefreshFailed
+
+            #if DEBUG
+            if Client.isLoggingEnabled() {
+                print("   - Has refresh token: \(!refreshToken.isEmpty)")
+                if !refreshToken.isEmpty {
+                    print("   - Refresh token preview: \(String(refreshToken.prefix(50)))...")
+                }
             }
-            
+            #endif
+
+            guard !refreshToken.isEmpty else {
+                #if DEBUG
+                if Client.isLoggingEnabled() {
+                    print("❌ Refresh failed: No refresh token available")
+                }
+                #endif
+                throw NetworkError.tokenRefreshFailed(statusCode: nil, message: "No refresh token available")
+            }
+
             let url = try createURL(from: "api/authenticate")
+
+            #if DEBUG
+            if Client.isLoggingEnabled() {
+                print("   - Refresh endpoint: \(url)")
+            }
+            #endif
+
             var request = URLRequest(url: url)
             request.httpMethod = "POST"
             request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
             request.setValue("application/json", forHTTPHeaderField: "Accept")
-            
-            let body = ["refreshToken": refreshToken]
+
+            // Include clientId if encryption is enabled
+            var body: [String: String] = ["refreshToken": refreshToken]
+            if Client.getIsEncryptionRequired() {
+                body["clientId"] = Client.getClientId()
+
+                #if DEBUG
+                if Client.isLoggingEnabled() {
+                    print("   - Encryption enabled, adding clientId to refresh request")
+                }
+                #endif
+            }
+
             request.httpBody = createFormData(from: body)
-            
+          
+          
+            debugPrint("refreshTOken Request Body",body)
+          
+
             let (data, response) = try await session.data(for: request)
-            
-            guard let httpResponse = response as? HTTPURLResponse,
-                  httpResponse.statusCode == 200 else {
-                throw NetworkError.tokenRefreshFailed
+
+            guard let httpResponse = response as? HTTPURLResponse else {
+                #if DEBUG
+                if Client.isLoggingEnabled() {
+                    print("❌ Refresh failed: Invalid response")
+                }
+                #endif
+                throw NetworkError.tokenRefreshFailed(statusCode: nil, message: "Invalid HTTP response")
             }
-            
+
+            #if DEBUG
+            if Client.isLoggingEnabled() {
+                print("   - Refresh response status: \(httpResponse.statusCode)")
+                if let responseString = String(data: data, encoding: .utf8) {
+                    print("   - Refresh response: \(responseString.prefix(200))")
+                }
+            }
+            #endif
+
+            guard httpResponse.statusCode == 200 else {
+                // Extract error message from response
+                let errorMessage = extractErrorMessage(from: data)
+
+                #if DEBUG
+                if Client.isLoggingEnabled() {
+                    print("❌ Refresh failed: Status code \(httpResponse.statusCode)")
+                    if let message = errorMessage {
+                        print("   - Error message: \(message)")
+                    }
+                }
+                #endif
+
+                throw NetworkError.tokenRefreshFailed(
+                    statusCode: httpResponse.statusCode,
+                    message: errorMessage ?? "Token refresh failed with status \(httpResponse.statusCode)"
+                )
+            }
+
             let authResponse = try JSONDecoder().decode(ApiAuthResponse.self, from: data)
-            
-            guard let newAccessToken = authResponse.token,
-                  let newRefreshToken = authResponse.refreshToken else {
-                throw NetworkError.tokenRefreshFailed
+
+            // Extract tokens - handle both encrypted and plain responses
+            let newAccessToken: String
+            let newRefreshToken: String
+
+            if Client.getIsEncryptionRequired(), let encryptedContent = authResponse.encryptedContent {
+                #if DEBUG
+                if Client.isLoggingEnabled() {
+                    print("🔓 Refresh response is encrypted, decrypting...")
+                }
+                #endif
+
+                // Decrypt the response using passPhrase
+                let encryptionModule = PBKDF2EncryptionModule()
+                guard let decryptedContent = encryptionModule.aesGcmPbkdf2DecryptFromBase64(
+                    data: encryptedContent,
+                    pass: Client.getPassphrase()
+                ),
+                let jsonData = decryptedContent.data(using: .utf8),
+                let tokenResponse = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any],
+                let accessToken = tokenResponse["token"] as? String,
+                let refreshTokenValue = tokenResponse["refreshToken"] as? String else {
+                    #if DEBUG
+                    if Client.isLoggingEnabled() {
+                        print("❌ Refresh failed: Could not decrypt response")
+                    }
+                    #endif
+                    throw NetworkError.tokenRefreshFailed(statusCode: 200, message: "Failed to decrypt refresh token response")
+                }
+
+                newAccessToken = accessToken
+                newRefreshToken = refreshTokenValue
+
+                #if DEBUG
+                if Client.isLoggingEnabled() {
+                    print("✅ Decrypted refresh response successfully")
+                }
+                #endif
+            } else {
+                // Plain response (no encryption)
+                guard let accessToken = authResponse.token,
+                      let refreshTokenValue = authResponse.refreshToken else {
+                    #if DEBUG
+                    if Client.isLoggingEnabled() {
+                        print("❌ Refresh failed: Missing tokens in plain response")
+                    }
+                    #endif
+                    throw NetworkError.tokenRefreshFailed(statusCode: 200, message: "Missing tokens in refresh response")
+                }
+
+                newAccessToken = accessToken
+                newRefreshToken = refreshTokenValue
+
+                #if DEBUG
+                if Client.isLoggingEnabled() {
+                    print("✅ Received plain refresh response")
+                }
+                #endif
             }
-            
+
+            #if DEBUG
+            if Client.isLoggingEnabled() {
+                print("✅ Token refresh successful!")
+                print("   - New access token: \(String(newAccessToken.prefix(50)))...")
+                print("   - New refresh token: \(String(newRefreshToken.prefix(50)))...")
+            }
+            #endif
+
             await tokenManager.saveTokens(accessToken: newAccessToken, refreshToken: newRefreshToken)
             return newAccessToken
         }
-        
+
         refreshTask = task
         return try await task.value
     }
@@ -487,9 +680,35 @@ public class NetworkService: ObservableObject {
                     ?? json["error"] as? String
             }
         } catch {
-            // If JSON parsing fails, try to get string representation
-            // This handles cases where server returns plain text error messages
-            return String(data: data, encoding: .utf8)
+            // JSON parsing failed - might be multiple JSON objects separated by newlines
+            // Try to parse the first line as JSON
+            if let responseString = String(data: data, encoding: .utf8) {
+                let lines = responseString.components(separatedBy: .newlines)
+                for line in lines {
+                    let trimmedLine = line.trimmingCharacters(in: .whitespacesAndNewlines)
+                    if trimmedLine.isEmpty { continue }
+
+                    // Try to parse this line as JSON
+                    if let lineData = trimmedLine.data(using: .utf8),
+                       let json = try? JSONSerialization.jsonObject(with: lineData) as? [String: Any] {
+
+                        #if DEBUG
+                        if Client.isLoggingEnabled() {
+                            print("⚠️ Parsed error from multi-line JSON response: \(trimmedLine)")
+                        }
+                        #endif
+
+                        // Extract error message from first valid JSON
+                        // Priority: errorMessage > message > error
+                        return json["errorMessage"] as? String
+                            ?? json["message"] as? String
+                            ?? json["error"] as? String
+                    }
+                }
+
+                // If no valid JSON found, return the first non-empty line
+                return lines.first(where: { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty })
+            }
         }
 
         return nil

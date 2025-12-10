@@ -275,6 +275,98 @@ class AuthClientModule(
         }
     }
 
+    // MARK: - Testing Methods (Dev/Test Only)
+
+    @ReactMethod
+    fun invalidateTokensForTesting(requestId: String, promise: Promise) {
+        launch {
+            try {
+                // Set expired tokens for testing
+                val tokenManager = authClientWrapper.getTokenManager()
+                val expiredToken = "eyJ0eXAiOiJ0b2tlbiIsImFsZyI6IkhTMjU2In0.eyJzdWIiOiJyYWh1bHMiLCJpYXQiOjE3MTc5NjA0NDUsImV4cCI6MTcxNzk2MDc0NX0.I-tR-Fg2O9getPA5CFN9uqePy2J6b8OK5mqIGinB1pY"
+
+                tokenManager.setAccessToken(expiredToken)
+                tokenManager.setTokenExpiry("1717960745") // Expired timestamp
+
+                val resultMap = WritableNativeMap().apply {
+                    putBoolean("success", true)
+                    putString("message", "Tokens invalidated with expired test tokens")
+                }
+
+                val gson = com.google.gson.Gson()
+                promise.resolve(gson.toJson(resultMap.toHashMap()))
+            } catch (e: Exception) {
+                Log.e(TAG, "Token invalidation failed", e)
+                promise.reject("TOKEN_INVALIDATION_ERROR", e.message, e)
+            }
+        }
+    }
+
+    @ReactMethod
+    fun clearTokensForTesting(requestId: String, promise: Promise) {
+        launch {
+            try {
+                val tokenManager = authClientWrapper.getTokenManager()
+                tokenManager.setAccessToken(null)
+                tokenManager.setRefreshToken(null)
+                tokenManager.setTokenExpiry(null)
+                tokenManager.setRefreshTokenExpiry(null)
+
+                val resultMap = WritableNativeMap().apply {
+                    putBoolean("success", true)
+                    putString("message", "All tokens cleared from storage")
+                }
+
+                val gson = com.google.gson.Gson()
+                promise.resolve(gson.toJson(resultMap.toHashMap()))
+            } catch (e: Exception) {
+                Log.e(TAG, "Token clear failed", e)
+                promise.reject("TOKEN_CLEAR_ERROR", e.message, e)
+            }
+        }
+    }
+
+    @ReactMethod
+    fun getTokenInfoForTesting(requestId: String, promise: Promise) {
+        launch {
+            try {
+                val tokenManager = authClientWrapper.getTokenManager()
+                val accessToken = tokenManager.getAccessToken() ?: ""
+                val refreshToken = tokenManager.getRefreshToken() ?: ""
+                val tokenExpiry = tokenManager.getTokenExpiry()
+                val isExpired = tokenManager.isAccessTokenExpired()
+
+                val resultMap = WritableNativeMap().apply {
+                    putBoolean("hasAccessToken", accessToken.isNotEmpty())
+                    putBoolean("hasRefreshToken", refreshToken.isNotEmpty())
+                    putBoolean("isExpired", isExpired)
+                    putString("accessTokenPreview", if (accessToken.isEmpty()) "" else accessToken.take(50) + "...")
+                    putString("refreshTokenPreview", if (refreshToken.isEmpty()) "" else refreshToken.take(50) + "...")
+
+                    tokenExpiry?.let {
+                        try {
+                            val expiryTimestamp = it.toLongOrNull()
+                            if (expiryTimestamp != null) {
+                                putDouble("expirationTimestamp", expiryTimestamp.toDouble())
+                                val dateFormat = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.getDefault())
+                                val date = java.util.Date(expiryTimestamp * 1000)
+                                putString("expirationDate", dateFormat.format(date))
+                            }
+                        } catch (e: Exception) {
+                            Log.w(TAG, "Failed to parse token expiry: $it", e)
+                        }
+                    }
+                }
+
+                val gson = com.google.gson.Gson()
+                promise.resolve(gson.toJson(resultMap.toHashMap()))
+            } catch (e: Exception) {
+                Log.e(TAG, "Get token info failed", e)
+                promise.reject("TOKEN_INFO_ERROR", e.message, e)
+            }
+        }
+    }
+
     // Request management
     @ReactMethod
     fun cancelRequest(requestId: String) {

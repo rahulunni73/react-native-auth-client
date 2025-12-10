@@ -393,6 +393,58 @@ class AuthClient {
     }
   }
 
+  // MARK: - Testing Methods (Dev/Test Only)
+
+  /**
+   * Invalidate tokens with expired test tokens
+   * FOR TESTING PURPOSES ONLY - Sets expired tokens to test refresh mechanism
+   */
+  async invalidateTokensForTesting(): Promise<{ success: boolean; message: string }> {
+    const requestId = this.generateRequestId();
+    try {
+      const response = await NativeAuthClient.invalidateTokensForTesting(requestId);
+      return this.parseResponse<{ success: boolean; message: string }>(response);
+    } catch (error) {
+      throw new Error(`Token invalidation failed: ${error}`);
+    }
+  }
+
+  /**
+   * Clear all tokens from storage
+   * FOR TESTING PURPOSES ONLY - Removes all tokens to test authentication flow
+   */
+  async clearTokensForTesting(): Promise<{ success: boolean; message: string }> {
+    const requestId = this.generateRequestId();
+    try {
+      const response = await NativeAuthClient.clearTokensForTesting(requestId);
+      return this.parseResponse<{ success: boolean; message: string }>(response);
+    } catch (error) {
+      throw new Error(`Token clear failed: ${error}`);
+    }
+  }
+
+  /**
+   * Get current token information
+   * FOR TESTING PURPOSES ONLY - Returns token status and expiration info
+   */
+  async getTokenInfoForTesting(): Promise<{
+    hasAccessToken: boolean;
+    hasRefreshToken: boolean;
+    isExpired: boolean;
+    accessTokenPreview?: string;
+    refreshTokenPreview?: string;
+    expirationDate?: string;
+    expirationTimestamp?: number;
+  }> {
+    const requestId = this.generateRequestId();
+    try {
+      const response = await NativeAuthClient.getTokenInfoForTesting(requestId);
+      return this.parseResponse(response);
+    } catch (error) {
+      throw new Error(`Get token info failed: ${error}`);
+    }
+  }
+
   /**
    * Cancel a specific request
    */

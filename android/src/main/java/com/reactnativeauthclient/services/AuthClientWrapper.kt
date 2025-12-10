@@ -49,6 +49,9 @@ class AuthClientWrapper(
     // Active requests for cancellation support
     private val activeRequests = ConcurrentHashMap<String, Job>()
 
+    // Public getter for testing purposes
+    fun getTokenManager(): TokenManager = tokenManager
+
     // Token refresh service
     private var tokenRefreshService: TokenRefreshService? = null
 
@@ -140,7 +143,8 @@ class AuthClientWrapper(
                         baseUrl = this@AuthClientWrapper.baseUrl,
                         tokenManager = tokenManager,
                         isEncryptionRequired = this@AuthClientWrapper.isEncryptionRequired,
-                        clientId = this@AuthClientWrapper.clientId
+                        clientId = this@AuthClientWrapper.clientId,
+                        passPhrase = this@AuthClientWrapper.passPhrase
                     )
                 }
 

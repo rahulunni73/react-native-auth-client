@@ -51,7 +51,7 @@ const AuthClientTestScreen: React.FC = () => {
 
   // Authentication state
   const [credentials, setCredentials] = useState<AuthCredentials>({
-    username: 'MO1',
+    username: 'MO4',
     password: 'Pass@123',
   });
 
@@ -166,8 +166,14 @@ const AuthClientTestScreen: React.FC = () => {
         headers: { 'Content-Type': 'application/json' },
       });
 
+
+        console.log("error ",result);
       showResult('GET Request Result', result);
     } catch (error) {
+
+      
+        
+
       showResult('GET Request Error', error);
       Alert.alert('Error', `GET request failed: ${error}`);
     } finally {
@@ -187,7 +193,7 @@ const AuthClientTestScreen: React.FC = () => {
         parentNodeId: '1388041405164736513',
         sortCriteria: 'DATE_DESC',
       };
-      const result = await AuthClient.post('deep-rest/api/v1/repo/runtime/nodes', testData, {
+      const result = await AuthClient.post('deep-rest/api/v1/repo/runtime/node/copy/1443465564359020544/1443466268444250112', {}, {
         headers: { 'Content-Type': 'application/json' },
       });
       showResult('POST Request Result', result);
@@ -212,6 +218,83 @@ const AuthClientTestScreen: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
+  }, []);
+
+  // MARK: - Token Testing Methods
+
+  // Get token info
+  const handleGetTokenInfo = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const result = await AuthClient.getTokenInfoForTesting();
+     
+      
+      showResult('Token Info', result);
+
+      const statusMessage = `
+Access Token: ${result.hasAccessToken ? '✅ Present' : '❌ Missing'}
+Refresh Token: ${result.hasRefreshToken ? '✅ Present' : '❌ Missing'}
+Status: ${result.isExpired ? '🔴 Expired' : '🟢 Valid'}
+${result.expirationDate ? `Expires: ${result.expirationDate}` : ''}
+      `.trim();
+
+      Alert.alert('Token Status', statusMessage);
+    } catch (error) {
+       console.log('Token Info Error', error);
+      showResult('Token Info Error', error);
+      Alert.alert('Error', `Failed to get token info: ${error}`);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  // Invalidate tokens (set expired tokens)
+  const handleInvalidateTokens = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const result = await AuthClient.invalidateTokensForTesting();
+      showResult('Tokens Invalidated', result);
+      Alert.alert(
+        'Tokens Invalidated',
+        'Access token has been set to an expired token. Try making a request to test automatic refresh!'
+      );
+    } catch (error) {
+      showResult('Token Invalidation Error', error);
+      Alert.alert('Error', `Failed to invalidate tokens: ${error}`);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  // Clear all tokens
+  const handleClearTokens = useCallback(async () => {
+    Alert.alert(
+      'Clear Tokens?',
+      'This will remove all tokens. You will need to authenticate again.',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Clear',
+          style: 'destructive',
+          onPress: async () => {
+            setIsLoading(true);
+            try {
+              const result = await AuthClient.clearTokensForTesting();
+              showResult('Tokens Cleared', result);
+              Alert.alert('Success', 'All tokens have been cleared!');
+            } catch (error) {
+              showResult('Token Clear Error', error);
+              Alert.alert('Error', `Failed to clear tokens: ${error}`);
+            } finally {
+              setIsLoading(false);
+            }
+          },
+        },
+      ]
+    );
   }, []);
 
   // Create node content for file upload
@@ -636,6 +719,60 @@ const AuthClientTestScreen: React.FC = () => {
         </View>
       )}
 
+      {/* Token Testing Section */}
+      {isInitialized && (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>🧪 Token Testing (Dev Only)</Text>
+
+          <View style={styles.encryptionInfo}>
+            <Text style={styles.encryptionInfoText}>
+              ⚠️ These functions are for testing refresh token mechanism
+            </Text>
+            <Text style={styles.encryptionInfoText}>
+              1. Check current token status
+            </Text>
+            <Text style={styles.encryptionInfoText}>
+              2. Invalidate tokens to set expired tokens
+            </Text>
+            <Text style={styles.encryptionInfoText}>
+              3. Make a request to test automatic refresh
+            </Text>
+          </View>
+
+          <TouchableOpacity
+            style={[styles.button, styles.tokenInfoButton]}
+            onPress={handleGetTokenInfo}
+            disabled={isLoading}
+          >
+            <Text style={styles.buttonText}>📊 Get Token Status</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.button, styles.tokenInvalidateButton]}
+            onPress={handleInvalidateTokens}
+            disabled={isLoading}
+          >
+            <Text style={styles.buttonText}>⏰ Set Expired Tokens</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.button, styles.tokenClearButton]}
+            onPress={handleClearTokens}
+            disabled={isLoading}
+          >
+            <Text style={styles.buttonText}>🗑️ Clear All Tokens</Text>
+          </TouchableOpacity>
+
+          <Text style={styles.testInstructions}>
+            💡 Test Flow:{'\n'}
+            1. Authenticate first{'\n'}
+            2. Click "Set Expired Tokens"{'\n'}
+            3. Make a GET/POST request{'\n'}
+            4. Watch logs - it should automatically refresh!
+          </Text>
+        </View>
+      )}
+
       {/* File Operations Section */}
       {isInitialized && (
         <View style={styles.section}>
@@ -849,6 +986,25 @@ const styles = StyleSheet.create({
   },
   postDownloadButton: {
     backgroundColor: '#FF9500',
+  },
+  tokenInfoButton: {
+    backgroundColor: '#5856D6',
+  },
+  tokenInvalidateButton: {
+    backgroundColor: '#FF9500',
+  },
+  tokenClearButton: {
+    backgroundColor: '#FF3B30',
+  },
+  testInstructions: {
+    fontSize: 13,
+    color: '#666',
+    backgroundColor: '#f8f9fa',
+    padding: 12,
+    borderRadius: 6,
+    marginTop: 12,
+    lineHeight: 20,
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
   },
   loading: {
     alignItems: 'center',

@@ -93,6 +93,19 @@ RCT_EXTERN_METHOD(logout:(NSString *)url
                   resolve:(RCTPromiseResolveBlock)resolve
                   reject:(RCTPromiseRejectBlock)reject)
 
+// Testing methods (Dev/Test only)
+RCT_EXTERN_METHOD(invalidateTokensForTesting:(NSString *)requestId
+                  resolve:(RCTPromiseResolveBlock)resolve
+                  reject:(RCTPromiseRejectBlock)reject)
+
+RCT_EXTERN_METHOD(clearTokensForTesting:(NSString *)requestId
+                  resolve:(RCTPromiseResolveBlock)resolve
+                  reject:(RCTPromiseRejectBlock)reject)
+
+RCT_EXTERN_METHOD(getTokenInfoForTesting:(NSString *)requestId
+                  resolve:(RCTPromiseResolveBlock)resolve
+                  reject:(RCTPromiseRejectBlock)reject)
+
 // Request cancellation (new modern features)
 RCT_EXTERN_METHOD(cancelRequest:(NSString *)requestId)
 RCT_EXTERN_METHOD(cancelAllRequests)

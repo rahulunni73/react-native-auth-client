@@ -123,6 +123,11 @@ export interface Spec extends TurboModule {
   // Session management
   logout(url: string, requestId: string): Promise<string>;
 
+  // Testing methods (Dev/Test only)
+  invalidateTokensForTesting(requestId: string): Promise<string>;
+  clearTokensForTesting(requestId: string): Promise<string>;
+  getTokenInfoForTesting(requestId: string): Promise<string>;
+
   // Request management
   cancelRequest(requestId: string): void;
   cancelAllRequests(): void;

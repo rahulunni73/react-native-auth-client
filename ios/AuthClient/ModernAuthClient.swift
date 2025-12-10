@@ -56,13 +56,101 @@ class AuthClient: RCTEventEmitter {
       result["clientId"] = Client.getClientId()
       result["encryptionEnabled"] = Client.getIsEncryptionRequired()
       result["isConfigured"] = Client.isConfigured()
-      
+
       do {
         let jsonData = try JSONSerialization.data(withJSONObject: result, options: [])
         let jsonString = String(data: jsonData, encoding: .utf8) ?? "{}"
         resolve(jsonString)
       } catch {
         reject("SERIALIZATION_ERROR", "Failed to serialize client info", error)
+      }
+    }
+  }
+
+  // MARK: - Testing Methods (Dev/Test Only)
+
+  @objc
+  func invalidateTokensForTesting(
+    _ requestId: String,
+    resolve: @escaping RCTPromiseResolveBlock,
+    reject: @escaping RCTPromiseRejectBlock
+  ) {
+    Task { @MainActor in
+      do {
+        await TokenManager.shared.invalidateTokens()
+
+        let result: [String: Any] = [
+          "success": true,
+          "message": "Tokens invalidated with expired test tokens"
+        ]
+
+        let jsonData = try JSONSerialization.data(withJSONObject: result, options: [])
+        let jsonString = String(data: jsonData, encoding: .utf8) ?? "{}"
+        resolve(jsonString)
+      } catch {
+        reject("TOKEN_INVALIDATION_ERROR", "Failed to invalidate tokens", error)
+      }
+    }
+  }
+
+  @objc
+  func clearTokensForTesting(
+    _ requestId: String,
+    resolve: @escaping RCTPromiseResolveBlock,
+    reject: @escaping RCTPromiseRejectBlock
+  ) {
+    Task { @MainActor in
+      do {
+        await TokenManager.shared.clearTokens()
+
+        let result: [String: Any] = [
+          "success": true,
+          "message": "All tokens cleared from storage"
+        ]
+
+        let jsonData = try JSONSerialization.data(withJSONObject: result, options: [])
+        let jsonString = String(data: jsonData, encoding: .utf8) ?? "{}"
+        resolve(jsonString)
+      } catch {
+        reject("TOKEN_CLEAR_ERROR", "Failed to clear tokens", error)
+      }
+    }
+  }
+
+  @objc
+  func getTokenInfoForTesting(
+    _ requestId: String,
+    resolve: @escaping RCTPromiseResolveBlock,
+    reject: @escaping RCTPromiseRejectBlock
+  ) {
+    Task { @MainActor in
+      do {
+        let tokenManager = TokenManager.shared
+        let accessToken = await tokenManager.getAccessToken()
+        let refreshToken = await tokenManager.getRefreshToken()
+        let isExpired = await tokenManager.isTokenExpired()
+        let expirationDate = await tokenManager.getTokenExpirationDate()
+
+        var result: [String: Any] = [
+          "hasAccessToken": !accessToken.isEmpty,
+          "hasRefreshToken": !refreshToken.isEmpty,
+          "isExpired": isExpired,
+          "accessTokenPreview": accessToken.isEmpty ? "" : String(accessToken.prefix(50)) + "...",
+          "refreshTokenPreview": refreshToken.isEmpty ? "" : String(refreshToken.prefix(50)) + "..."
+        ]
+
+        if let expDate = expirationDate {
+          let formatter = DateFormatter()
+          formatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
+          result["expirationDate"] = formatter.string(from: expDate)
+          result["expirationTimestamp"] = expDate.timeIntervalSince1970
+        }
+
+        let jsonData = try JSONSerialization.data(withJSONObject: result, options: [])
+        let jsonString = String(data: jsonData, encoding: .utf8) ?? "{}"
+        resolve(jsonString)
+      } catch {
+        reject("TOKEN_INFO_ERROR", "Failed to get token info", error)
       }
     }
   }

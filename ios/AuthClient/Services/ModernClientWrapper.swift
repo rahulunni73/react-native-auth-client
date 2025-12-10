@@ -380,6 +380,11 @@ class ModernClientWrapper: ObservableObject {
         #endif
 
         if let encryptedContent = apiAuthResponse.encryptedContent {
+          
+          
+          debugPrint("encryptedContent ",encryptedContent)
+          
+          
             // Handle encrypted response
             guard let decryptedContent = encryptionModule.aesGcmPbkdf2DecryptFromBase64(
                 data: encryptedContent,
@@ -397,6 +402,8 @@ class ModernClientWrapper: ObservableObject {
                     errorMessage: "Failed to decrypt authentication response"
                 )
             }
+          
+          debugPrint("decrypted refresh tokens: ", refreshToken)
             
             await tokenManager.saveTokens(accessToken: accessToken, refreshToken: refreshToken)
             
@@ -417,6 +424,8 @@ class ModernClientWrapper: ObservableObject {
                 )
             }
             
+
+          
             await tokenManager.saveTokens(accessToken: accessToken, refreshToken: refreshToken)
             
             result["message"] = "Authorization Granted"
@@ -1329,8 +1338,13 @@ class ModernClientWrapper: ObservableObject {
                 } else {
                     result["loginStatus"] = AuthClientConstants.AUTH_FAILED
                 }
-                            case .tokenRefreshFailed:
-                result["httpStatusCode"] = 401
+            case .tokenRefreshFailed(let statusCode, let message):
+                result["httpStatusCode"] = statusCode ?? 401
+                if let message = message {
+                    result["errorMessage"] = message
+                    result["message"] = message
+                }
+                result["loginStatus"] = AuthClientConstants.TOKEN_EXPIRED
             case .unauthorized:
                 result["httpStatusCode"] = 401
                 result["message"] = "Unauthorized"
@@ -1388,6 +1402,14 @@ class ModernClientWrapper: ObservableObject {
                     result["message"] = "Request failed"
                 }
 
+            case .tokenRefreshFailed(let statusCode, let message):
+                result["httpStatusCode"] = statusCode ?? 401
+                if let message = message {
+                    result["errorMessage"] = message
+                    result["message"] = message
+                } else {
+                    result["message"] = "Token refresh failed"
+                }
             case .unauthorized:
                 result["httpStatusCode"] = 401
                 result["message"] = "Unauthorized"

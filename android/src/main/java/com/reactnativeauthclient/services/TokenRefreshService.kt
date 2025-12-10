@@ -1,6 +1,8 @@
 package com.reactnativeauthclient.services
 
 import android.util.Log
+import com.reactnativeauthclient.crypto.PBKDF2EncryptionModule
+import com.reactnativeauthclient.interceptors.EncryptionInterceptor
 import com.reactnativeauthclient.models.ApiAuthResponse
 import kotlinx.coroutines.*
 import retrofit2.Response
@@ -12,12 +14,14 @@ import java.util.concurrent.TimeUnit
 /**
  * Service dedicated to token refresh operations
  * Uses a separate OkHttp client to avoid circular authentication calls
+ * Includes EncryptionInterceptor to handle encrypted responses when encryption is enabled
  */
 class TokenRefreshService(
     private val baseUrl: String,
     private val tokenManager: TokenManager,
     private val isEncryptionRequired: Boolean,
-    private val clientId: String
+    private val clientId: String,
+    private val passPhrase: String
 ) {
     companion object {
         private const val TAG = "TokenRefreshService"
@@ -25,12 +29,28 @@ class TokenRefreshService(
     }
 
     // Separate OkHttp client without authenticator to prevent infinite loops
+    // Includes EncryptionInterceptor to decrypt encrypted refresh responses
     private val refreshClient: OkHttpClient by lazy {
-        OkHttpClient.Builder()
+        val builder = OkHttpClient.Builder()
             .connectTimeout(30, TimeUnit.SECONDS)
             .readTimeout(60, TimeUnit.SECONDS)
             .writeTimeout(60, TimeUnit.SECONDS)
-            .build()
+
+        // Add encryption interceptor if encryption is enabled
+        if (isEncryptionRequired && clientId.isNotEmpty() && passPhrase.isNotEmpty()) {
+            val encryptionModule = PBKDF2EncryptionModule()
+            builder.addInterceptor(
+                EncryptionInterceptor(
+                    encryptionModule = encryptionModule,
+                    getClientId = { clientId },
+                    getPassPhrase = { passPhrase },
+                    isEncryptionRequired = { isEncryptionRequired }
+                )
+            )
+            Log.d(TAG, "EncryptionInterceptor added to refresh client")
+        }
+
+        builder.build()
     }
 
     // Separate Retrofit instance for token refresh

@@ -9,7 +9,7 @@ import retrofit2.Response
 import retrofit2.http.*
 
 interface ApiService {
-    
+
     // Authentication endpoints
     @FormUrlEncoded
     @POST
@@ -19,7 +19,7 @@ interface ApiService {
         @Field("username") username: String,
         @Field("password") password: String
     ): Response<ApiAuthResponse>
-    
+
     @FormUrlEncoded
     @POST
     @Headers("Cache-control: no-cache")
@@ -29,7 +29,7 @@ interface ApiService {
         @Field(value = "password", encoded = true) password: String,
         @Field(value = "clientId", encoded = true) clientId: String
     ): Response<ApiAuthResponse>
-    
+
     @FormUrlEncoded
     @POST
     @Headers("Cache-control: no-cache")
@@ -38,7 +38,7 @@ interface ApiService {
         @Field("username") username: String,
         @Field("idToken") idToken: String
     ): Response<ApiAuthResponse>
-    
+
     @FormUrlEncoded
     @POST
     @Headers("Cache-control: no-cache")
@@ -48,21 +48,21 @@ interface ApiService {
         @Field(value = "idToken", encoded = true) idToken: String,
         @Field(value = "clientId", encoded = true) clientId: String
     ): Response<ApiAuthResponse>
-    
+
     // HTTP operations
     @GET
     suspend fun executeGet(
         @Url url: String,
         @HeaderMap headers: Map<String, String>
     ): Response<ApiClientResult>
-    
+
     @POST
     suspend fun executePost(
         @Url url: String,
         @Body requestBody: Map<String, @JvmSuppressWildcards Any>,
         @HeaderMap headers: Map<String, String>
     ): Response<ApiClientResult>
-    
+
     // File download endpoints
     @GET
     @Streaming
@@ -71,7 +71,7 @@ interface ApiService {
         @Url url: String,
         @HeaderMap headers: Map<String, String>
     ): Response<ApiClientResult>
-    
+
     @GET
     @Streaming
     @Headers("Content-Type:application/json", "Accept:application/json")
@@ -79,7 +79,7 @@ interface ApiService {
         @Url url: String,
         @HeaderMap headers: Map<String, String>
     ): Response<ResponseBody>
-    
+
     @POST
     @Streaming
     @Headers("Content-Type:application/json", "Accept:application/json")
@@ -87,7 +87,7 @@ interface ApiService {
         @Url url: String,
         @HeaderMap headers: Map<String, String>
     ): Response<ResponseBody>
-    
+
     // File upload endpoints
     @POST
     @Multipart
@@ -95,7 +95,7 @@ interface ApiService {
         @Url url: String,
         @PartMap formData: Map<String, @JvmSuppressWildcards RequestBody>
     ): Response<ApiClientResult>
-    
+
     @POST
     @Multipart
     suspend fun uploadWithFiles(
@@ -103,7 +103,7 @@ interface ApiService {
         @Part files: List<MultipartBody.Part>,
         @PartMap formData: Map<String, @JvmSuppressWildcards RequestBody>
     ): Response<ApiClientResult>
-    
+
     // Form data submission
     @POST
     @Multipart
@@ -111,7 +111,7 @@ interface ApiService {
         @Url url: String,
         @PartMap data: Map<String, @JvmSuppressWildcards RequestBody>
     ): Response<ApiClientResult>
-    
+
     // Token refresh endpoints
     @FormUrlEncoded
     @POST
@@ -120,7 +120,7 @@ interface ApiService {
         @Url url: String,
         @Field(value = "refreshToken", encoded = false) refreshToken: String
     ): Response<ApiAuthResponse>
-    
+
     @FormUrlEncoded
     @POST
     @Headers("Cache-control: no-cache")
