@@ -2,6 +2,7 @@ import UIKit
 import React
 import React_RCTAppDelegate
 import ReactAppDependencyProvider
+import TrustKit
 
 @main
 class AppDelegate: UIResponder, UIApplicationDelegate {
@@ -14,6 +15,27 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
   ) -> Bool {
+    
+    
+    
+    // --- ADD TRUSTKIT CONFIGURATION HERE ---
+        let trustKitConfig: [String: Any] = [
+            kTSKPinnedDomains: [
+                "app.example.com": [
+                    kTSKEnforcePinning: true,
+                    kTSKIncludeSubdomains: true,
+                    kTSKPublicKeyHashes: [
+                        "EeCUJh6Dz3DoL64PbKX2KRfpIEuKqj1TEszHzQjbqo4=",
+                        "Za6cPehI7OG6cuDZka5NDZ7FR8a60d3auda+sKfg4Nc="
+                    ],
+                    kTSKReportUris: ["https://app.example.com/exampleApp"]
+                ]
+            ]
+        ]
+        TrustKit.initSharedInstance(withConfiguration: trustKitConfig)
+        // ---------------------------------------
+    
+  
     let delegate = ReactNativeDelegate()
     let factory = RCTReactNativeFactory(delegate: delegate)
     delegate.dependencyProvider = RCTAppDependencyProvider()

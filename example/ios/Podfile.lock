@@ -1,5 +1,5 @@
 PODS:
-  - AuthClient (0.2.7):
+  - AuthClient (0.3.0):
     - boost
     - DoubleConversion
     - fast_float
@@ -26,6 +26,7 @@ PODS:
     - ReactCommon/turbomodule/bridging
     - ReactCommon/turbomodule/core
     - SocketRocket
+    - TrustKit (~> 3.0.7)
     - Yoga
   - boost (1.84.0)
   - DoubleConversion (1.1.6)
@@ -2369,6 +2370,7 @@ PODS:
     - React-utils (= 0.81.1)
     - SocketRocket
   - SocketRocket (0.7.1)
+  - TrustKit (3.0.7)
   - Yoga (0.0.0)
 
 DEPENDENCIES:
@@ -2451,6 +2453,7 @@ DEPENDENCIES:
 SPEC REPOS:
   trunk:
     - SocketRocket
+    - TrustKit
 
 EXTERNAL SOURCES:
   AuthClient:
@@ -2602,7 +2605,7 @@ EXTERNAL SOURCES:
     :path: "../node_modules/react-native/ReactCommon/yoga"
 
 SPEC CHECKSUMS:
-  AuthClient: b9618d3cb2819f329e749422c85afe9fd60303a9
+  AuthClient: a27e7ad88c15b54ad6975730d16bb8a538141267
   boost: 7e761d76ca2ce687f7cc98e698152abd03a18f90
   DoubleConversion: cb417026b2400c8f53ae97020b2be961b59470cb
   fast_float: b32c788ed9c6a8c584d114d0047beda9664e7cc6
@@ -2675,6 +2678,7 @@ SPEC CHECKSUMS:
   ReactCodegen: 3baedb0c33f963250c866151b825a3c5194b12f1
   ReactCommon: e897f9a1b4afab370cfefaaf5fb3c80371bc3937
   SocketRocket: d4aabe649be1e368d1318fdf28a022d714d65748
+  TrustKit: 1050f3ce0595f8ed775f1237b7f590e3a4f93e91
   Yoga: fa23995c18b65978347b096d0836f4f5093df545
 
 PODFILE CHECKSUM: a6b009bd47c72b680ecc4eba8953fac13ce020b0

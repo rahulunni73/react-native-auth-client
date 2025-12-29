@@ -6,6 +6,7 @@
 ///
 
 import Foundation
+import TrustKit
 
 // MARK: - Network Errors
 
@@ -77,14 +78,16 @@ public struct RequestConfig {
 // MARK: - Network Service
 
 @MainActor
-public class NetworkService: ObservableObject {
+public class NetworkService: NSObject, ObservableObject, URLSessionDelegate {
     public static let shared = NetworkService()
-    
     private let tokenManager: TokenManager
-    private let session: URLSession
+    private var session: URLSession
     private var refreshTask: Task<String, Error>?
     
-    private init() {
+    private override init() {
+      
+        self.tokenManager = TokenManager.shared
+      
         let configuration = URLSessionConfiguration.default
         configuration.timeoutIntervalForRequest = Client.getDefaultTimeout()
         configuration.timeoutIntervalForResource = Client.getDefaultTimeout() * 2
@@ -95,15 +98,33 @@ public class NetworkService: ObservableObject {
         configuration.httpShouldSetCookies = false
         configuration.httpCookieStorage = nil
 
-        self.session = URLSession(configuration: configuration)
-        self.tokenManager = TokenManager.shared
+        //self.session = URLSession(configuration: configuration)
+      
+      //3.Initialize session with 'self' as delegate
+      self.session = URLSession(configuration: configuration)
+
+      
+      // Call super.init() before using 'self'
+      super.init()
+      
+      // Now reconfigure the session with self as delegate
+      self.session = URLSession(
+          configuration: configuration,
+          delegate: self,
+          delegateQueue: nil
+      )
+        
         
         #if DEBUG
         if Client.isLoggingEnabled() {
             print("🌐 NetworkService initialized with timeout: \(Client.getDefaultTimeout())s")
         }
         #endif
+    
+      
     }
+  
+  
     
     // MARK: - GET Request
     
@@ -716,7 +737,16 @@ public class NetworkService: ObservableObject {
     
     private func mapURLError(_ error: Error) -> NetworkError {
         if let urlError = error as? URLError {
-            switch urlError.code {
+          switch urlError.code {
+            case .serverCertificateHasBadDate,
+                         .serverCertificateUntrusted,
+                         .serverCertificateHasUnknownRoot,
+                         .cancelled,
+                         .serverCertificateNotYetValid:
+                        // This is likely a pinning failure
+                        return .serverError(403, "SSL Pinning Validation Failed")
+            
+              
             case .timedOut:
                 return .requestTimeout
             case .notConnectedToInternet, .networkConnectionLost:
@@ -726,5 +756,28 @@ public class NetworkService: ObservableObject {
             }
         }
         return .unknown(error)
+    }
+  
+  
+}
+
+
+
+
+// MARK: - SSL Pinning Delegate
+extension NetworkService {
+    nonisolated public func urlSession(
+        _ session: URLSession,
+        didReceive challenge: URLAuthenticationChallenge,
+        completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
+    ) {
+        // Feed the challenge to TrustKit
+        if !TrustKit.sharedInstance().pinningValidator.handle(challenge, completionHandler: completionHandler) {
+            // If the domain is NOT pinned in TrustKit, fall back to default validation
+            completionHandler(.performDefaultHandling, nil)
+        }
+        // Note: If TrustKit validation fails, it calls completionHandler with .cancelAuthenticationChallenge
+        // which results in URLError.cancelled
+        completionHandler(.cancelAuthenticationChallenge, nil )
     }
 }

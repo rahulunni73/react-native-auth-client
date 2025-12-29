@@ -20,4 +20,8 @@ Pod::Spec.new do |s|
 
 
   install_modules_dependencies(s)
+
+   s.dependency "TrustKit", "~> 3.0.7"
+
+
 end

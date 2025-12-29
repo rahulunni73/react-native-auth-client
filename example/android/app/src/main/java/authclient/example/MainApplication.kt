@@ -9,6 +9,7 @@ import com.facebook.react.ReactNativeHost
 import com.facebook.react.ReactPackage
 import com.facebook.react.defaults.DefaultReactHost.getDefaultReactHost
 import com.facebook.react.defaults.DefaultReactNativeHost
+import com.reactnativeauthclient.models.SSLPinningConfigHolder
 
 class MainApplication : Application(), ReactApplication {
 
@@ -34,5 +35,39 @@ class MainApplication : Application(), ReactApplication {
   override fun onCreate() {
     super.onCreate()
     loadReactNative(this)
+
+    // --- SSL PINNING CONFIGURATION (like iOS TrustKit in AppDelegate) ---
+      configureSSLPinning()
+    // -----------------------------------------------------------------
+
   }
+
+
+  private fun configureSSLPinning() {
+    val sslConfig = listOf(
+      SSLPinningConfigHolder.PinningConfig(
+        hostname = "app.example.com",
+        pins = listOf(
+          "EeCUJh6Dz3DoL64PbKX2KRfpIEuKqj1TEszHzQjbqo4=",
+          "Za6cPehI7OG6cuDZka5NDZ7FR8a60d3auda+sKfg4Nc="
+        ),
+        includeSubdomains = true,
+        enforcePinning = true
+      )
+      // Add more domains if needed
+      // SSLPinningConfigHolder.PinningConfig(
+      //     hostname = "api.example.com",
+      //     pins = listOf("pin1", "pin2"),
+      //     includeSubdomains = false
+      // )
+    )
+
+    SSLPinningConfigHolder.setConfig(sslConfig)
+
+    android.util.Log.d(
+      "SSLPinning",
+      "✅ SSL Pinning configured for: ${sslConfig.map { it.hostname }}"
+    )
+  }
+
 }

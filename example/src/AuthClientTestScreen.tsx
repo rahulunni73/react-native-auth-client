@@ -33,10 +33,10 @@ const AuthClientTestScreen: React.FC = () => {
 
   // Configuration state
   const [config, setConfig] = useState<AuthClientConfig>({
-    baseUrl: 'http://103.156.208.92:20080/ospyndocs/',
-    isEncryptionRequired: true,
-    clientId: 'e8f6226f4597719e78c320c73a5e3c5d',
-    passPhrase: '876a9335d006293475d7',
+    baseUrl: 'https://app.example.com/example/',
+    isEncryptionRequired: false,
+    clientId: 'random-client-id-12345',
+    passPhrase: 'random-pass-phrase-67890',
   });
 
   // Toggle encryption for testing
@@ -51,8 +51,8 @@ const AuthClientTestScreen: React.FC = () => {
 
   // Authentication state
   const [credentials, setCredentials] = useState<AuthCredentials>({
-    username: 'MO4',
-    password: 'Pass@123',
+    username: 'example.person@domain.com',
+    password: 'kxYgkBqr8!2w',
   });
 
   // Google SSO state
@@ -109,7 +109,7 @@ const AuthClientTestScreen: React.FC = () => {
     setIsLoading(true);
     try {
       const result: AuthResponse = await AuthClient.authenticate(
-        'api/authenticate',
+        'example/api/auth/login',
         credentials
       );
 
@@ -162,18 +162,11 @@ const AuthClientTestScreen: React.FC = () => {
   const handleTestGet = useCallback(async () => {
     setIsLoading(true);
     try {
-      const result = await AuthClient.get('deep-rest/api/v1/user/info/data', {
+      const result = await AuthClient.get('endpoint', {
         headers: { 'Content-Type': 'application/json' },
       });
-
-
-        console.log("error ",result);
       showResult('GET Request Result', result);
     } catch (error) {
-
-      
-        
-
       showResult('GET Request Error', error);
       Alert.alert('Error', `GET request failed: ${error}`);
     } finally {
@@ -190,10 +183,10 @@ const AuthClientTestScreen: React.FC = () => {
         name: '',
         nodeTypeQnames: [],
         offset: 10,
-        parentNodeId: '1388041405164736513',
+        parentNodeId: 'parent-nodeId',
         sortCriteria: 'DATE_DESC',
       };
-      const result = await AuthClient.post('deep-rest/api/v1/repo/runtime/node/copy/1443465564359020544/1443466268444250112', {}, {
+      const result = await AuthClient.post('endpoint', testData, {
         headers: { 'Content-Type': 'application/json' },
       });
       showResult('POST Request Result', result);
@@ -209,7 +202,7 @@ const AuthClientTestScreen: React.FC = () => {
   const handleLogout = useCallback(async () => {
     setIsLoading(true);
     try {
-      const result: AuthResponse = await AuthClient.logout('deep-rest/api/v1/logout');
+      const result: AuthResponse = await AuthClient.logout('endpoint');
       showResult('Logout Result', result);
       Alert.alert('Success', 'Logged out successfully!');
     } catch (error) {
@@ -227,8 +220,7 @@ const AuthClientTestScreen: React.FC = () => {
     setIsLoading(true);
     try {
       const result = await AuthClient.getTokenInfoForTesting();
-     
-      
+
       showResult('Token Info', result);
 
       const statusMessage = `
@@ -240,7 +232,7 @@ ${result.expirationDate ? `Expires: ${result.expirationDate}` : ''}
 
       Alert.alert('Token Status', statusMessage);
     } catch (error) {
-       console.log('Token Info Error', error);
+      console.log('Token Info Error', error);
       showResult('Token Info Error', error);
       Alert.alert('Error', `Failed to get token info: ${error}`);
     } finally {
@@ -309,9 +301,9 @@ ${result.expirationDate ? `Expires: ${result.expirationDate}` : ''}
 
   // Create test file path
   const createTestFile = async (): Promise<string> => {
-    const fileName = `quadratic_equation.png`;
+    const fileName = `sample.png`;
     if (Platform.OS === 'android') {
-      return '/data/data/authclient.example/files/quadratic_equation.png';
+      return 'path/sample.png';
     } else {
       return `Documents/${fileName}`;
     }
@@ -325,7 +317,7 @@ ${result.expirationDate ? `Expires: ${result.expirationDate}` : ''}
 
     try {
       const filePath = await createTestFile();
-      const nodeContent = createNodeContent('1388041405164736513');
+      const nodeContent = createNodeContent('node_number');
 
       const requestBody: DeepFileUploadRequest = {
         file: {
@@ -335,7 +327,7 @@ ${result.expirationDate ? `Expires: ${result.expirationDate}` : ''}
       };
 
       const result: FileResponse = await AuthClient.uploadFile(
-        'deep-rest/api/v1/repo/runtime/file/upload',
+        'endpoint',
         requestBody,
         (progress: ProgressEvent) => {
           const progressPercent = Math.round(progress.progress * 100);
@@ -374,7 +366,7 @@ ${result.expirationDate ? `Expires: ${result.expirationDate}` : ''}
     setIsLoading(true);
 
     try {
-      const fileUrl = '/deep-rest/api/v1/runtime/user/photo/43';
+      const fileUrl = 'endpoint';
       const downloadPath = createDownloadFilePath();
 
       const result: FileResponse = await AuthClient.downloadFile(
@@ -407,7 +399,7 @@ ${result.expirationDate ? `Expires: ${result.expirationDate}` : ''}
     setIsLoading(true);
 
     try {
-      const fileUrl = 'deep-rest/api/v1/repo/runtime/file/1442669019204210688';
+      const fileUrl = 'filePath/to/image.jpg';
 
       const result: FileResponse = await AuthClient.downloadFileAsBase64(
         fileUrl,
@@ -499,7 +491,9 @@ ${result.expirationDate ? `Expires: ${result.expirationDate}` : ''}
         ]}
       >
         <Text style={styles.encryptionBadgeText}>
-          {config.isEncryptionRequired ? '🔒 ENCRYPTION: ON' : '🔓 ENCRYPTION: OFF'}
+          {config.isEncryptionRequired
+            ? '🔒 ENCRYPTION: ON'
+            : '🔓 ENCRYPTION: OFF'}
         </Text>
         <Text style={styles.encryptionBadgeSubtext}>
           {config.isEncryptionRequired
@@ -533,7 +527,9 @@ ${result.expirationDate ? `Expires: ${result.expirationDate}` : ''}
           editable={!isInitialized}
         />
 
-        <Text style={styles.label}>Pass Phrase (for request/response encryption):</Text>
+        <Text style={styles.label}>
+          Pass Phrase (for request/response encryption):
+        </Text>
         <TextInput
           style={styles.input}
           value={config.passPhrase}
@@ -577,8 +573,9 @@ ${result.expirationDate ? `Expires: ${result.expirationDate}` : ''}
 
         {isInitialized && (
           <Text style={styles.infoText}>
-            ℹ️ Encryption is {config.isEncryptionRequired ? 'ACTIVE' : 'DISABLED'}.
-            Change encryption settings requires re-initialization.
+            ℹ️ Encryption is{' '}
+            {config.isEncryptionRequired ? 'ACTIVE' : 'DISABLED'}. Change
+            encryption settings requires re-initialization.
           </Text>
         )}
       </View>
@@ -591,10 +588,12 @@ ${result.expirationDate ? `Expires: ${result.expirationDate}` : ''}
           {config.isEncryptionRequired && (
             <View style={styles.encryptionInfo}>
               <Text style={styles.encryptionInfoText}>
-                🔒 Password will be encrypted using <Text style={styles.bold}>clientId</Text>
+                🔒 Password will be encrypted using{' '}
+                <Text style={styles.bold}>clientId</Text>
               </Text>
               <Text style={styles.encryptionInfoText}>
-                🔓 Response will be decrypted using <Text style={styles.bold}>passPhrase</Text>
+                🔓 Response will be decrypted using{' '}
+                <Text style={styles.bold}>passPhrase</Text>
               </Text>
             </View>
           )}
@@ -630,9 +629,7 @@ ${result.expirationDate ? `Expires: ${result.expirationDate}` : ''}
           </TouchableOpacity>
 
           {/* Google SSO Authentication */}
-          <Text style={[styles.subSectionTitle, { marginTop: 16 }]}>
-            Google SSO Login
-          </Text>
+          <Text style={[styles.subSectionTitle]}>Google SSO Login</Text>
           <Text style={styles.label}>Email:</Text>
           <TextInput
             style={styles.input}
@@ -674,10 +671,12 @@ ${result.expirationDate ? `Expires: ${result.expirationDate}` : ''}
           {config.isEncryptionRequired && (
             <View style={styles.encryptionInfo}>
               <Text style={styles.encryptionInfoText}>
-                🔒 POST: Request body encrypted with <Text style={styles.bold}>passPhrase</Text>
+                🔒 POST: Request body encrypted with{' '}
+                <Text style={styles.bold}>passPhrase</Text>
               </Text>
               <Text style={styles.encryptionInfoText}>
-                🔓 GET/POST: Response decrypted with <Text style={styles.bold}>passPhrase</Text>
+                🔓 GET/POST: Response decrypted with{' '}
+                <Text style={styles.bold}>passPhrase</Text>
               </Text>
               <Text style={styles.encryptionInfoText}>
                 ℹ️ GET requests have no body encryption (no body to encrypt)
@@ -781,7 +780,8 @@ ${result.expirationDate ? `Expires: ${result.expirationDate}` : ''}
           {config.isEncryptionRequired && (
             <View style={styles.encryptionInfo}>
               <Text style={styles.encryptionInfoText}>
-                🔒 Upload: Metadata fields encrypted with <Text style={styles.bold}>passPhrase</Text>
+                🔒 Upload: Metadata fields encrypted with{' '}
+                <Text style={styles.bold}>passPhrase</Text>
               </Text>
               <Text style={styles.encryptionInfoText}>
                 📁 Upload: File content sent as multipart (not encrypted)
@@ -932,6 +932,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#eee',
     paddingBottom: 4,
+    marginTop: 16,
   },
   label: {
     fontSize: 14,
